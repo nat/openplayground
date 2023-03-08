@@ -167,18 +167,18 @@ const ModelCard = forwardRef((props, ref) => {
           {children}
         </span>
       )
-      if (entityData.model.startsWith("openai:")) {
-        content = (
-          <TooltipProvider>
-            <Tooltip delayDuration={300} skipDelayDuration={150}>
-              <TooltipTrigger asChild>{content}</TooltipTrigger>
-              <TooltipContent hidden={!showProbabilitiesRef.current } side="bottom">
-                <p>Probability = {entityData.prob}%</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )
-      }
+      // if (entityData.model.startsWith("openai:")) {
+      //   content = (
+      //     <TooltipProvider>
+      //       <Tooltip delayDuration={300} skipDelayDuration={150}>
+      //         <TooltipTrigger asChild>{content}</TooltipTrigger>
+      //         <TooltipContent hidden={!showProbabilitiesRef.current } side="bottom">
+      //           <p>Probability = {entityData.prob}%</p>
+      //         </TooltipContent>
+      //       </Tooltip>
+      //     </TooltipProvider>
+      //   )
+      // }
 
       return content
     } else {
@@ -275,7 +275,7 @@ const ModelCard = forwardRef((props, ref) => {
     let newContentState = currentContent.createEntity(
       "HIGHLIGHTED_WORD",
       "MUTABLE",
-      { model: output.model_name, output: output.message, prob: output.prob }
+      { model: output.model_name, output: output.message } // prob: output.prob
     )
     // Call getLastCreatedEntityKey to get the key of the newly created DraftEntity record.
     const entityKey = currentContent.getLastCreatedEntityKey()
@@ -459,21 +459,21 @@ export default function Compare() {
         </span>
       )
 
-      if (entityData.model.startsWith("openai:")) {
-        content = (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>{content}</TooltipTrigger>
-              <TooltipContent
-                hidden={!showProbabilitiesRef.current}
-                side="bottom"
-              >
-                <p>Probability = {entityData.prob}%</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )
-      }
+      // if (entityData.model.startsWith("openai:")) {
+      //   content = (
+      //     <TooltipProvider>
+      //       <Tooltip>
+      //         <TooltipTrigger asChild>{content}</TooltipTrigger>
+      //         <TooltipContent
+      //           hidden={!showProbabilitiesRef.current}
+      //           side="bottom"
+      //         >
+      //           <p>Probability = {entityData.prob}%</p>
+      //         </TooltipContent>
+      //       </Tooltip>
+      //     </TooltipProvider>
+      //   )
+      // }
 
       return content
     } else {
@@ -1779,7 +1779,7 @@ export default function Compare() {
           }
         />
 
-        <Tooltip delayDuration={300} skipDelayDuration={150}>
+        {/* <Tooltip delayDuration={300} skipDelayDuration={150}>
           <TooltipTrigger asChild>
             <div className="cursor-default flex justify-between align-middle inline-block align-middle mb-1">
               <p className="text-sm font-normal float-left align-text-top">
@@ -1799,7 +1799,7 @@ export default function Compare() {
               token was to be generated,<br/> if the model supports it.
             </p>
           </TooltipContent>
-        </Tooltip>
+        </Tooltip> */}
 
         <Tooltip delayDuration={300} skipDelayDuration={150}>
           <TooltipTrigger asChild>
