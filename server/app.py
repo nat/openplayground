@@ -114,30 +114,34 @@ def store_api_key():
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
-@app.route('/api/check-key-store', methods=['POST'])
+@app.route('/api/check-key-store', methods=['GET'])
 def check_key_store():
-    data = request.get_json(force=True)
-    print(data)
+    '''
+    Checks all the API keys stored in the .env file - matches against the providers in models.json
+    Model must have "api_key" field set to true in models.json, otherwise "None" is returned
+    Keys are stored in .env in {PROVIDER}_API_KEY format
+    '''
+    models_json = json.load(open('models.json',))
+    # for i, model_promodels_json.keys()
+
     response = {}
-    for i, model_provider in enumerate(data['model_provider']):
-        model_provider = model_provider.lower()
-        if (model_provider == "openai"):
-            provider_key = "OPENAI_API_KEY"
-        elif (model_provider == "cohere"):
-            provider_key = "COHERE_API_KEY"
-        elif (model_provider == "huggingface"):
-            provider_key = "HF_API_KEY"
-        elif (model_provider == "forefront"):
-            provider_key = "FOREFRONT_API_KEY"
+    for provider in models_json.keys():
+        if (provider == "default"): 
+            continue
         else:
-            provider_key = "UNKNOWN_API_KEY"
-        key = data['model_provider'][i]
-        if os.environ.get(provider_key) is None:
+            provider_key = provider.upper() + "_API_KEY"
+
+        if models_json[provider]["api_key"] == False:
+            # return empty if key not needed
+            warnings.warn("warning: no API key needed for provider " + provider)
+            response[provider] = "None"
+        elif os.environ.get(provider_key) is None:
+            warnings.warn("warning: no API key found for provider " + provider)
             # return empty is key not found
-            response[key] = ""
+            response[provider] = ""
         else:
-            # return key if found
-            response[key] = os.getenv(provider_key)
+            # return key
+            response[provider] = os.environ.get(provider_key)
 
     response = jsonify(response)
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -152,10 +156,9 @@ def create_response_message(message: str, status_code: int) -> Response:
 #@app.before_request
 @app.route("/api/stream", methods=["POST"])
 def stream_inference():
-    # if (request.path != "/api/stream"):
-    #     return
-    # if request.method == 'OPTIONS':
-    #     return create_response_message("OK", 200)
+    '''
+    Takes in inference request from frontend, checks for valid parameters, and dispatchees to inference queue
+    '''
         
     data = request.get_json(force=True)
     print(f"Path: {request.path}, Request: {data}")

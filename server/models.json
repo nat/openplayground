@@ -1,6 +1,6 @@
 {
     "openai": {
-        "apiKey" : true,
+        "api_key" : true,
         "models" : {
             "text-ada-001": {
                 "parameters": {
@@ -220,7 +220,7 @@
         }
     },
     "cohere": {
-        "apiKey": true,
+        "api_key": true,
         "models": {
             "xlarge": {
                 "parameters": {
@@ -425,7 +425,7 @@
         }
     },
     "huggingface": {
-        "apiKey": true,
+        "api_key": true,
         "parameters": {
             "temperature": {
                 "value": 1.0,
@@ -469,7 +469,7 @@
         }
     },
     "textgeneration": {
-        "apiKey": false,
+        "api_key": false,
         "parameters": {
             "temperature": {
                 "value": 1.0,
@@ -509,10 +509,10 @@
         }
     },
     "forefront": {
-        "apiKey": true
+        "api_key": true
     },
     "aleph-alpha": {
-        "apiKey": true
+        "api_key": true
     },
     "default": {
         "temperature": {
