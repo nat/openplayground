@@ -622,11 +622,8 @@ export default function Compare() {
       const json_params = await response.json();
       const models = [];
       const default_enabled_models = [
-        'google/flan-ul2',
-        'llama-65b',
         'command-xlarge-nightly',
         'gpt-3.5-turbo',
-        'claude'
       ];
 
       Object.keys(json_params).forEach(function (key) {
@@ -685,6 +682,7 @@ export default function Compare() {
           }
         }
 
+      console.log("Setting models with parameters...", models)
       setModelsWithParameters(models)
 
      
@@ -830,7 +828,7 @@ export default function Compare() {
     const completions_buffer = {};
 
     const sse = new SSE(
-      ENDPOINT_URL.concat('/api/stream'),
+      ENDPOINT_URL.concat('/api/listen'),
       {
         headers: {},
         payload: JSON.stringify({
@@ -921,6 +919,30 @@ export default function Compare() {
     });
 
     sse.stream();
+
+    await fetch(ENDPOINT_URL.concat("/api/stream"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: regenerate ? passedInPrompt : prompt,
+        models: modelsWithParameters.map((model) => {
+          if(model.state.enabled) {
+            completions_buffer[model.tag] = [];
+
+            return {
+              name: model.name, tag: model.tag, provider: model.provider, parameters: Object.keys(model.parameters).reduce(
+              (acc, key) => {
+                acc[key] = model.parameters[key].value
+                return acc
+              },
+              {})
+            }
+          }
+        }).filter(Boolean)
+      })
+    })
   }
 
   // ensure ref is up to date
