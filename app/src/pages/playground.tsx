@@ -555,7 +555,7 @@ export default function Playground() {
     // begin model loading and inference
 
     const sse = new SSE(
-      ENDPOINT_URL.concat('/api/stream'),
+      ENDPOINT_URL.concat('/api/listen'),
       {
         payload: JSON.stringify({
           headers: {},
@@ -582,6 +582,7 @@ export default function Playground() {
         })
       }
     )
+
     sseRef.current = sse;
     function beforeUnloadHandler() {
       sse.close()
@@ -607,7 +608,7 @@ export default function Playground() {
 
     sse.addEventListener("infer", (event) => {
       let resp = JSON.parse(event.data)
-      //console.log("STREAMING " + resp["message"])
+      console.log("STREAMING " + resp["message"])
 
       let prob = "-1"
       if (resp.hasOwnProperty("prob")) {
@@ -657,6 +658,35 @@ export default function Playground() {
     });
 
     sse.stream();
+
+    await fetch(ENDPOINT_URL.concat("/api/stream"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: regenerate ? passedInPrompt : prompt,
+        models: [
+          {
+            name: model,
+            tag: model,
+            provider: modelsWithParameters.find((m) => m.name === model).provider,
+            parameters: {
+              temperature: temperature,
+              maximum_length: maximumLength,
+              top_p: topP,
+              top_k: topK,
+              presence_penalty: presencePenalty,
+              frequency_penalty: frequencyPenalty,
+              repetition_penalty: repetitionPenalty,
+              num_beams: numBeams,
+              num_return_sequences: numReturnSequences,
+              stop_sequences: stopSequences.length > 0 ? stopSequences : null
+            }
+          }
+        ]
+      })
+    })
   }
 
   useEffect(() => {

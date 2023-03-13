@@ -1,6 +1,6 @@
-import gevent
-from gevent import monkey
-monkey.patch_all()
+# import gevent
+# from gevent import monkey
+# monkey.patch_all(thread=False, socket=False)
 
 import json
 import os
@@ -8,8 +8,9 @@ import time
 import cachetools
 import requests
 import sseclient
-from sse import sse
+from sse import Message
 import sseserver as sse_server
+from sseserver import SSEQueueWithTopic, SSEQueue
 import queue
 import math
 import openai
@@ -37,7 +38,8 @@ if not DOTENV_FILE:
 load_dotenv(override=True)
 
 # global sse server manager
-SSE_MANAGER = None
+SSE_MANAGER = SSEQueue()
+# SSE_MANAGER.start()
 
 app = Flask(__name__, static_folder='../app/dist')
 @app.route('/', defaults={'path': ''})
@@ -53,9 +55,40 @@ def serve(path):
         
     return send_from_directory(app.static_folder, path)
 
+# Testing route
 @app.route('/hello')
 def hello():
     return "Hello World!"
+
+@app.route("/api/listen", methods=["POST", "OPTIONS"])
+def listen():
+    global SSE_MANAGER
+    #print("request in stream", request.data)
+    uuid = "1" # this is sent upon connection from the frontend
+    print("Streaming SSE", uuid)
+
+    @stream_with_context
+    def generator():
+        messages = SSE_MANAGER.listen()
+        print("genertor queue", messages)
+        try:
+            while True:
+                message = messages.get()
+                message = json.loads(message)
+                if message["type"] == "done":
+                    print("Done streaming SSE")
+                    break
+                print("YIELDING message", str(Message(**message)))
+                yield str(Message(**message))
+        except GeneratorExit:
+            print("SSE Terminated")
+            SSE_MANAGER.sse_publish("cancel_inference", message=json.dumps({"uuid": uuid}))
+            print("GeneratorExit")
+        finally:
+            #close and clean up redis connection
+            pass
+
+    return Response(stream_with_context(generator()), mimetype='text/event-stream')
 
 # Routes to store, reload, and check API keys
 # Store API key in .env file, for given provider
@@ -116,20 +149,22 @@ def create_response_message(message: str, status_code: int) -> Response:
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
-@sse.before_request
-def check_access():
-    print("checking for access", request)
-    if request.method == 'OPTIONS':
-        return create_response_message("OK", 200)
-    
+#@app.before_request
+@app.route("/api/stream", methods=["POST"])
+def stream_inference():
+    # if (request.path != "/api/stream"):
+    #     return
+    # if request.method == 'OPTIONS':
+    #     return create_response_message("OK", 200)
+        
     data = request.get_json(force=True)
-    print(f"Request: {data}")
+    print(f"Path: {request.path}, Request: {data}")
 
     if not isinstance(data['prompt'], str) or not isinstance(data['models'], list):
         return create_response_message("Invalid request", 400)
     
-    request_uuid = str(uuid.uuid4())
-    request.data = json.dumps({"uuid": request_uuid})
+    request_uuid = "1"
+    # request.data = json.dumps({"uuid": request_uuid})
 
     prompt = data['prompt']
     models = data['models']
@@ -158,6 +193,7 @@ def check_access():
             name = name.removeprefix("openai:")
             required_parameters = ["temperature", "top_p", "maximum_length", "stop_sequences", "frequency_penalty", "presence_penalty", "stop_sequences"]
         elif provider == "cohere":
+            print("identified cohere")
             name = name.removeprefix("cohere:")
             required_parameters = ["temperature", "top_p", "top_k", "maximum_length", "presence_penalty", "frequency_penalty", "stop_sequences"]
         elif provider == "huggingface":
@@ -191,11 +227,14 @@ def check_access():
             uuid=request_uuid, model_name=name, model_tag=tag, model_provider=provider,
             model_parameters=sanitized_params, prompt=prompt)
         )
+        print("all tasks: ", all_tasks)
 
     if len(all_tasks) > 0:
-        gevent.spawn(bulk_completions, all_tasks) #lock
+        bulk_completions(all_tasks)
+        # gevent.spawn(bulk_completions, all_tasks) #lock
         #else:
         #return create_response_message("Too many pending requests", 429)
+        return create_response_message(message="success", status_code=200)
     else:
         print("sending response back")
         return create_response_message("I see you", 500)
@@ -217,8 +256,9 @@ def all_models():
     sorted_models = {}
     
     for provider in providers:
-        for modal_tag, model in sorted(models_by_provider[provider], key=lambda x: x[1]['name']):
-            sorted_models[modal_tag] = model
+        for model_tag, model in models_by_provider[provider]:
+            model_tag = f"{provider}:{model_tag}"
+            sorted_models[model_tag] = model
 
     response = app.response_class(
         response=json.dumps(sorted_models),
@@ -228,8 +268,6 @@ def all_models():
 
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
-
-app.register_blueprint(sse, url_prefix='/api/stream')
 
 CORS(app)
 
@@ -278,10 +316,11 @@ InferenceFunction = Callable[[str, InferenceRequest], None]
 
 class InferenceAnnouncer:
     def __init__(self, sse_client):
-        self.sse_client = sse_client
+        self.sse_client = SSE_MANAGER
         self.cancel_cache = cachetools.TTLCache(maxsize=1000, ttl=60)
 
     def __format_message__(self, event: str, infer_result: InferenceResult) -> str:
+        print("formatting message")
         encoded = {
             "message": infer_result.token,
             "model_name": infer_result.model_name,
@@ -310,7 +349,8 @@ class InferenceAnnouncer:
         else:
             message = self.__format_message__(event=event, infer_result=infer_result)
 
-        self.sse_client.publish(infer_result.uuid, message)
+        print(f"Announcing {event} for uuid: {infer_result.uuid}, message: {message}")
+        self.sse_client.announce(message)
 
         return True
 
@@ -544,18 +584,13 @@ class InferenceManager:
             if response.status_code != 200:
                 raise Exception(f"Request failed: {response.status_code} {response.reason}")
 
-            #print("Cohere Response", response.status_code, response.reason)
-
             total_tokens = 0
-            #print("Cohere Response", response.status_code, response.reason)
             cancelled = False
 
             for token in response.iter_lines():
-                #print("1")
-                #print("token", token)
                 token = token.decode('utf-8')
                 token_json = json.loads(token)
-                print("TOKEN JSON", token_json)
+                # print("TOKEN JSON", token_json)
                 #print("token_json", token_json)
                 total_tokens += 1
                 if cancelled: continue
@@ -801,9 +836,9 @@ class InferenceManager:
     def __hosted_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         #wait for announcement from "llama:inference:response"
         pubsub = GlobalState.sse_client
-        pubsub.sse_subscribe(f"alpaca:inference:complete:{inference_request.uuid}")
+        # pubsub.sse_subscribe(f"alpaca:inference:complete:{inference_request.uuid}")
 
-        for message in pubsub.sse_listen():
+        for message in pubsub.listen():
             if message["type"] == "message":
                 print("Inference complete!!!")
                 pubsub.unsubscribe(f"alpaca:inference:complete:{inference_request.uuid}")
@@ -818,7 +853,7 @@ class InferenceManager:
 
 class ModelManager:
     def __init__(self, sse_client):
-        self.sse_client = sse_client
+        self.sse_client = SSE_MANAGER
         self.local_cache = {}
         self.inference_manager = InferenceManager(sse_client)
         self.models_json = json.load(open('models.json',))
@@ -838,8 +873,10 @@ class ModelManager:
         model_parameters = {}
         for provider in provider_model_map:
             for model in provider_model_map[provider]:
-                model_parameters[model] = self.get_model_with_parameters(model)
-                model_parameters[model]["parameters"] = json.loads(model_parameters[model]["parameters"])
+                model_parameters[model] = self.get_model_with_parameters(provider=provider, model_name=model)
+                model_parameters[model]["name"] = model
+                model_parameters[model]["parameters"] = model_parameters[model]["parameters"]
+                model_parameters[model]["provider"] = provider
         return model_parameters
 
     def get_model_with_parameters(self, provider: str, model_name: str):
@@ -876,6 +913,7 @@ class ModelManager:
             api_key=self.get_provider_key(inference_request.model_provider),
             version_key=None
         )
+        print("received inference request", inference_request.model_provider)
         if inference_request.model_provider == "openai":
             return self.inference_manager.openai_text_generation(provider_details, inference_request)
         elif inference_request.model_provider == "cohere":
@@ -899,8 +937,16 @@ class GlobalState:
 def bulk_completions(tasks: List[InferenceRequest]): #lock
     time.sleep(1) # enough time for the SSE to establish connection, we don't want to drop any tokens
 
-    completion_greenlets = [gevent.spawn(GlobalState.model_manager.text_generation, inference_request) for inference_request in tasks]
-    gevent.joinall(completion_greenlets)
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = []
+        for inference_request in tasks:
+            print("sending inference request:", inference_request.model_provider)
+            futures.append(executor.submit(GlobalState.model_manager.text_generation, inference_request))
+
+        results = [future.result() for future in futures]
+        
+    # completion_greenlets = [gevent.spawn(GlobalState.model_manager.text_generation, inference_request) for inference_request in tasks]
+    # gevent.joinall(completion_greenlets)
 
     GlobalState.model_manager.get_announcer().announce(InferenceResult(
         uuid=tasks[0].uuid,
@@ -917,6 +963,4 @@ def bulk_completions(tasks: List[InferenceRequest]): #lock
 
 if __name__ == '__main__':
     # start sse before the server
-    SSE_MANAGER = sse_server.SSEManager(address=("127.0.0.1", 2437), authkey=b'sse')
-    SSE_MANAGER.connect()
     app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)

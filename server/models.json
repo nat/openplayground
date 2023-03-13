@@ -18,7 +18,7 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
@@ -61,7 +61,7 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
@@ -104,7 +104,7 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
@@ -147,7 +147,7 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
@@ -190,7 +190,7 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
@@ -238,14 +238,14 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
                             1.0
                         ]
                     },
-                    "top_k": {
+                    "topK": {
                         "value": 0,
                         "range": [
                             0,
@@ -288,14 +288,14 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
                             1.0
                         ]
                     },
-                    "top_k": {
+                    "topK": {
                         "value": 0,
                         "range": [
                             0,
@@ -338,14 +338,14 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
                             1.0
                         ]
                     },
-                    "top_k": {
+                    "topK": {
                         "value": 0,
                         "range": [
                             0,
@@ -388,14 +388,14 @@
                             1024
                         ]
                     },
-                    "top_p": {
+                    "topP": {
                         "value": 1.0,
                         "range": [
                             0.1,
                             1.0
                         ]
                     },
-                    "top_k": {
+                    "topK": {
                         "value": 0,
                         "range": [
                             0,
@@ -441,14 +441,14 @@
                     1024
                 ]
             },
-            "top_p": {
+            "topP": {
                 "value": 1.0,
                 "range": [
                     0.1,
                     1.0
                 ]
             },
-            "top_k": {
+            "topK": {
                 "value": 1,
                 "range": [
                     1,
@@ -485,14 +485,14 @@
                     1024
                 ]
             },
-            "top_p": {
+            "topP": {
                 "value": 1.0,
                 "range": [
                     0.1,
                     1.0
                 ]
             },
-            "top_k": {
+            "topK": {
                 "value": 1,
                 "range": [
                     1,
@@ -529,14 +529,14 @@
                 1024
             ]
         },
-        "top_p": {
+        "topP": {
             "value": 1.0,
             "range": [
                 0.1,
                 1.0
             ]
         },
-        "top_k": {
+        "topK": {
             "value": 1,
             "range": [
                 1,

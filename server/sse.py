@@ -104,7 +104,7 @@ class ServerSentEventsBlueprint(Blueprint):
         """
         Return the :class:`SSEServer` instance for this blueprint.
         """
-        sse_manager = sse_server.SSEManager(address=("127.0.0.1", 2437), authkey=b'sse')
+        sse_manager = sse_server.SSEManager(address=("127.0.0.1", 9001), authkey=b'sse')
         sse_manager.connect()
 
         return sse_manager
@@ -127,6 +127,7 @@ class ServerSentEventsBlueprint(Blueprint):
         """
         message = Message(data, type=type, id=id, retry=retry)
         msg_json = json.dumps(message.to_dict())
+        print("PUBLISHING:", msg_json, "to channel:", channel)
         return self.sse_server.sse_publish(channel=channel, message=msg_json)
 
     def messages(self, channel='sse'):
@@ -137,7 +138,8 @@ class ServerSentEventsBlueprint(Blueprint):
         # when we subscribe here, we want it to be implcility known that when we
         # listen, we are only listening for what happens in the channel we subscribed to
         try:
-            for pubsub_message in self.sse_server.sse_listen(channel):
+            for pubsub_message in self.sse_server.sse_listen(channel)._getvalue():
+                print("PUBSUB MESSAGE:", pubsub_message)                
                 if pubsub_message['type'] == 'message':
                     msg_dict = json.loads(pubsub_message['data'])
                     if msg_dict["type"] == "done":
@@ -149,7 +151,7 @@ class ServerSentEventsBlueprint(Blueprint):
         except GeneratorExit:
             print("GeneratorExit")
         finally:
-            print("Terminatng?")
+            print("Terminating?")
             try:
                 self.sse_server.sse_unsubscribe(channel)
             except ConnectionError:
