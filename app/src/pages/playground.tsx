@@ -395,15 +395,55 @@ export default function Playground() {
       const response = await fetch(
         ENDPOINT_URL.concat("/api/all_models"),
         {
-          method: "GET",
-          headers: { 
-          } 
+          method: "GET"
         }
       )
       
 
       const json_params = await response.json()
       console.log("json_params", json_params)
+
+      let model_keys = Object.keys(localStorage)
+        .filter((key_name) => {
+          if (key_name.startsWith("model_")) {
+            return true
+          }
+          return false
+        })
+        .map(function (item, i) {
+          return item.replace("model_", "")
+      })
+
+      var localstorage_model_dict = {}
+      model_keys.map((modelName) => {
+        let model_value = JSON.parse(
+          localStorage.getItem("model_" + modelName) || "{}"
+        )
+        let modelProvider = model_value.model_provider
+        // if (modelProvider === "textgeneration") {
+        //   modelProvider = "textgeneration"
+        // } else if (modelProvider === "huggingface") {
+        //   modelProvider = "huggingface"
+        // } else if (modelProvider === "cohere") {
+        //   modelProvider = "cohere"
+        // } else if (modelProvider === "openai") {
+        //   modelProvider = "openai"
+        // }
+        // check to make sure its downloaded and not already in available models state
+        let model_key = `${modelProvider}:${modelName}`
+        if (
+          availableModels[model_key] === undefined &&
+          model_value.available === true
+        ) {
+          // add to dict on two conditions
+          // not already there (set from downloaded state from before and prevent re-adding)
+          // and is available for inference
+          localstorage_model_dict[model_key] = modelName
+        }
+      })
+
+      console.log("localstorage_model_dict", localstorage_model_dict)
+
       const models = [];
       const model_dict = {}
 
@@ -424,14 +464,24 @@ export default function Playground() {
         model_dict[model_key] = model["name"]
       })
 
+      console.log(models)
+      console.log(model_dict)
+
+
+      console.log("available models in playground", availableModels)
+
+      
       setAvailableModels((availableModels: any) => ({
         ...availableModels,
-        ...model_dict,
+        ...localstorage_model_dict,
       }))
+
 
       if(!settings.model_name) {
         setModel("openai:text-davinci-003")
       }
+
+      // we look at available models -- (selected models, and if there are some that need to be set within models with parameters we do that (like textgeneration or huggingface remote models))
 
       //console.warn("Setting setModelsWithParameters", models)
       setModelsWithParameters(models)

@@ -59,7 +59,6 @@ function RoutesProvider() {
 }
 
 export default function App() {
-  // TODO: change apiKeyAvailable to a better variable name - as it holds the api not just booleans
   const [modelsInformation, setModelsInformation] = React.useState({})
   const { toast } = useToast()
 

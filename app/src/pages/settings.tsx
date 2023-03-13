@@ -11,44 +11,12 @@ import { APIContext, ModelContext } from "../app"
 import { useBreakpoint } from "../hooks/useBreakpoint"
 import { KeyBindingUtil } from "draft-js"
 import { useToast } from "../hooks/ui/use-toast"
+import { json } from "react-router-dom"
 
-const ENDPOINT_URL = process.env.NODE_ENV === "production" || !process.env.ENDPOINT_URL ? "" : process.env.ENDPOINT_URL
-
-console.warn("ENDPOINT_URL", ENDPOINT_URL)
-// config to fill out page dynamically
-const CONFIG = {
-  openai: {
-    models: [
-      "text-alpha-002-latest",
-      "text-alpha-002-current",
-      "text-alpha-002-safety",
-      "text-davinci-003",
-      "text-curie-001",
-      "text-babbage-001",
-      "text-ada-001",
-    ],
-    tags: ["OpenAI"],
-  },
-  cohere: {
-    models: [
-      "medium",
-      "xlarge",
-      "command-medium-nightly",
-      "command-xlarge-nightly",
-    ],
-    tags: ["co:here"],
-  },
-  "HuggingFace Hosted": {
-    models: ["google/flan-t5-base", "snrspeaks/t5-one-line-summary"],
-    tags: ["HuggingFace Hosted"],
-  },
-  "HuggingFace Local": {
-    models: ["google/flan-t5-base", "snrspeaks/t5-one-line-summary"],
-    tags: ["HuggingFace Local"],
-  },
-}
-
-const tags = ["OpenAI", "co:here", "HuggingFace Hosted", "HuggingFace Local"]
+const ENDPOINT_URL =
+  process.env.NODE_ENV === "production" || !process.env.ENDPOINT_URL
+    ? ""
+    : process.env.ENDPOINT_URL
 
 // huggingface model fetch
 // https://huggingface.co/api/models?pipeline_tag=text2text-generation
@@ -61,7 +29,7 @@ openai --> openai:
 co:here --> cohere:
 */
 
-// this is only available for huggingface textgeneration: prefixed models (HuggingFace Local tag)
+// this is only available for huggingface textgeneration: prefixed models (textgeneration tag)
 function queueModelDownload(
   model: string,
   modelProvider: string,
@@ -71,7 +39,7 @@ function queueModelDownload(
 ) {
   // model here is direct path, no prefix, local storage is considered as a data store to persist models across sessions
   console.log("Downloading model", model)
-  fetch(`${ENDPOINT_URL}/api/download-model`, {
+  fetch(ENDPOINT_URL.concat("/api/download-model"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -133,13 +101,13 @@ function useStoredModels() {
     modelArr.forEach((model) => {
       let store_val = JSON.stringify({
         model_provider: modelProvider,
-        available: modelProvider === "HuggingFace Local" ? false : true,
+        available: modelProvider === "huggingface" ? false : true,
       })
       // model_ prefixed so easier to sort through localstorage
       localStorage.setItem(`model_${model}`, store_val)
     })
     // queue model download
-    if (modelProvider === "HuggingFace Local") {
+    if (modelProvider === "huggingface") {
       modelArr.forEach((model) => {
         queueModelDownload(
           model,
@@ -186,43 +154,21 @@ function useHuggingFaceModelSearch() {
 
   return { searchModels, huggingFaceSearchResults }
 }
-
-function useModelProviders() {
-  const [modelProvider, setModelProvider] = React.useState<string>("OpenAI") // string of model provider
-  const { searchModels: searchHuggingFaceModels, huggingFaceSearchResults } =
-    useHuggingFaceModelSearch()
-
-  const availableModelMap = {
-    OpenAI: CONFIG.openai.models,
-    "co:here": CONFIG.cohere.models,
-    "HuggingFace Hosted": huggingFaceSearchResults,
-    "HuggingFace Local": huggingFaceSearchResults,
-  }
-  console.log(modelProvider)
-  const availableModelsFromProviders = availableModelMap[modelProvider]
-
-  return {
-    modelProvider,
-    setModelProvider,
-    availableModelsFromProviders,
-    searchHuggingFaceModels,
-  }
-}
  
 export default function Settings() {
   const [selectedModels, setSelectedModels] = React.useState<string[]>([]) // string of models
   const [apiKey, setAPIKey] = React.useState<string>("") // string of api key
   const { storedModels, setStoredModels, saveModelSelection } =
     useStoredModels()
-  const {
-    modelProvider,
-    setModelProvider,
-    availableModelsFromProviders,
-    searchHuggingFaceModels,
-  } = useModelProviders()
+  const { searchModels: searchHuggingFaceModels, huggingFaceSearchResults } =
+    useHuggingFaceModelSearch()
+  const [modelProvider, setModelProvider] = React.useState<string>("openai")
+  const [allAvailableProviders, setAllAvailableProviders] = React.useState<any>()
+  const [availableModelMap, setAvailableModelMap] = React.useState<any>({})
+
   const { availableModels, setAvailableModels } = useContext(ModelContext)
   const { isLg } = useBreakpoint("lg")
-  const { apiKeyAvailable, setApiKeyAvailable } = useContext(APIContext)
+  const { modelsInformation, setModelsInformation } = useContext(APIContext)
   const [downloadedModels, setDownloadedModels] = useState([])
   const [dataLoading, setDataLoading] = useState<boolean>(true)
   const [revealAPIKey, setRevealAPIKey] = useState<boolean>(false)
@@ -233,8 +179,8 @@ export default function Settings() {
     // just to see if this works
     setDataLoading(true)
     // let model_keys = {}
-    const preloadData = async () => {
-        const model_res = await fetch(`${ENDPOINT_URL}/api/get-models-in-cache`)
+    const preloadCacheData = async () => {
+        const model_res = await fetch(ENDPOINT_URL.concat("/api/get-models-in-cache"))
         const cached_data = await model_res.json()
         let models = cached_data.models
         let cached_models: string[] = []
@@ -244,15 +190,37 @@ export default function Settings() {
         });
         // set if models downloaded
         setDownloadedModels(cached_models)
-        setDataLoading(false)
         console.log("settings render done")
-        console.log("api key available", apiKeyAvailable)
+        console.log("api key available", modelsInformation)
+    }
+    preloadCacheData()
+
+    const preloadData = async () => {
+      const res = await fetch(ENDPOINT_URL.concat("/api/all_models"))
+      const json_params = await res.json()
+      console.log("in settings", json_params)
+  
+      let modelMap = {}
+      let modelProviders = []
+  
+      for (const [key, value] of Object.entries(json_params)) {
+        if (!(modelProviders.includes(value.provider))) {
+          modelProviders.push(value.provider)
+        }
+        if (!(value.provider in modelMap)) {
+          modelMap[value.provider] = []
+        } 
+        modelMap[value.provider].push(value.name)
+      }
+      setAvailableModelMap(modelMap)
+      setAllAvailableProviders(modelProviders)
+      setDataLoading(false)
     }
     preloadData()
   }, [])
 
   useEffect(() => {
-    setAPIKey(apiKeyAvailable[`api_${modelProvider}`])
+    setAPIKey(modelsInformation[`api_${modelProvider}`])
   }, [modelProvider])
 
   // on X or unchecked, remove model from local storage
@@ -263,11 +231,11 @@ export default function Settings() {
     let model_value = JSON.parse(localStorage.getItem(model_key) || "{}")
     let modelProvider = model_value.model_provider
     // can probably abstract this into a utils function
-    if (modelProvider === "HuggingFace Local") {
+    if (modelProvider === "textgeneration") {
       modelProvider = "textgeneration"
-    } else if (modelProvider === "HuggingFace Hosted") {
+    } else if (modelProvider === "huggingface") {
       modelProvider = "huggingface"
-    } else if (modelProvider === "co:here") {
+    } else if (modelProvider === "cohere") {
       modelProvider = "cohere"
     } else if (modelProvider === "OpenAI") {
       modelProvider = "openai"
@@ -305,10 +273,10 @@ export default function Settings() {
           console.log(data)
         })
       // update api key saved state
-      let model_keys = {...apiKeyAvailable}
+      let model_keys = {...modelsInformation}
       model_keys[modelProvider] = true
       model_keys[`api_${modelProvider}`] = apiKey
-      setApiKeyAvailable(model_keys)
+      setModelsInformation(model_keys)
       toast({
         title: "API Key Saved",
         description: `${modelProvider} API key is saved and ready for generations!`,
@@ -323,6 +291,7 @@ export default function Settings() {
       // we can just do the download queue here?
       saveModelSelection(modelProvider, [model]) // add on checked
       setSelectedModels([...selectedModels, model])
+      console.log("selected models", selectedModels)
     } else {
       // if unchecked remove from selectedModels
       console.log("unchecked")
@@ -341,7 +310,7 @@ export default function Settings() {
             <h1 className="scroll-m-20 text-3xl mb-5 font-extrabold tracking-tight hidden lg:inline-block">
               Providers
             </h1>
-            {tags.map((tag: any) => (
+            {!dataLoading && allAvailableProviders.map((tag: any) => (
               <React.Fragment key={tag}>
                 <Button
                   key={tag}
@@ -357,21 +326,20 @@ export default function Settings() {
           </div>
           {/* RENDER MODEL BASED PAGE HERE */}
           <div className="col-span-6 lg:col-span-3 flex flex-row mx-2 lg:mx-0">
-            <Separator orientation="vertical" className="mr-5 hidden lg:block" />
             <div className="py-6">
               <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight">
                 {modelProvider} Setup
               </h1>
               {/* treat model selection like a form */}
               <div className="mt-5">
-                {modelProvider != "HuggingFace Local" ? (
+                {modelProvider != "huggingface" ? (
                   <>
-                  {!dataLoading && Object.keys(apiKeyAvailable).length != 0 ? 
+                  {!dataLoading && Object.keys(modelsInformation).length != 0 ? 
                     <>
                       <h3 className="scroll-m-20 text-xl font-extrabold tracking-tight mt-5">
                         API Key
                       </h3>
-                      {apiKeyAvailable && apiKeyAvailable[modelProvider] && apiKeyAvailable[`api_${modelProvider}`] ?  
+                      {modelsInformation && modelsInformation[modelProvider] && modelsInformation[`api_${modelProvider}`] ?  
                       null
                       :
                       <p className="text-red-500"><b>No API key is saved for {modelProvider}</b></p>
@@ -409,7 +377,7 @@ export default function Settings() {
                 ) : (
                   <></>
                 )}
-                {modelProvider === "HuggingFace Local" && (
+                {modelProvider === "huggingface" && (
                   <p>
                     Once a model is selected, it will download in the
                     background. When ready for inference it will show in the
@@ -421,7 +389,7 @@ export default function Settings() {
                     </b>
                   </p>
                 )}
-                {modelProvider === "HuggingFace Local" && (
+                {modelProvider === "huggingface" && (
                   <>
                   <h3 className="scroll-m-20 text-xl font-extrabold tracking-tight mt-5">
                     Downloaded Models
@@ -463,8 +431,8 @@ export default function Settings() {
                 <h3 className="scroll-m-20 text-xl font-extrabold tracking-tight mt-5">
                   Model Selection
                 </h3>
-                {modelProvider === "HuggingFace Hosted" ||
-                modelProvider === "HuggingFace Local" ? (
+                {modelProvider === "huggingface" ||
+                modelProvider === "textgeneration" ? (
                   <p>
                     Search for a model or part of a model to get matches from
                     HuggingFace Hub
@@ -475,8 +443,8 @@ export default function Settings() {
                     dropdown in playground
                   </p>
                 )}
-                {(modelProvider === "HuggingFace Hosted" ||
-                  modelProvider === "HuggingFace Local") && (
+                {(modelProvider === "textgeneration" ||
+                  modelProvider === "huggingface") && (
                   <form onSubmit={searchHuggingFaceModels}>
                     <div className="flex w-full max-w-sm items-center space-x-2 mt-2">
                       <Input
@@ -493,7 +461,7 @@ export default function Settings() {
                 <form onSubmit={handleModelSubmit}>
                   <div className="min-h-[320px] w-full border rounded-md mt-2">
                     <div className="p-2">
-                      {availableModelsFromProviders.map((model: any) => (
+                      {!dataLoading && availableModelMap[modelProvider].map((model: any) => (
                         <div
                           key={model}
                           className="rounded-md border border-slate-200 px-4 py-3 my-2 font-mono text-sm dark:border-slate-700"
@@ -518,7 +486,6 @@ export default function Settings() {
           </div>
           {/* SELECTED MODELS */}
           <div className="col-span-6 lg:col-span-2 flex flex-row mx-2 lg:mx-0 ">
-            <Separator orientation="vertical" className="mr-5 hidden lg:block" />
             <div className="lg:py-6">
               <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight">
                 Your Selected Models

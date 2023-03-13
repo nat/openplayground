@@ -25,6 +25,7 @@ from typing import Callable, List, Union
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, Response, abort, send_from_directory, stream_with_context
 from flask_cors import CORS
+from huggingface_hub import hf_hub_download, try_to_load_from_cache, scan_cache_dir, _CACHED_NO_EXIST
 
 from transformers import T5Tokenizer
 google_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-xl")
@@ -89,63 +90,6 @@ def listen():
             pass
 
     return Response(stream_with_context(generator()), mimetype='text/event-stream')
-
-# Routes to store, reload, and check API keys
-# Store API key in .env file, for given provider
-@app.route('/api/store-api-key', methods=['POST'])
-def store_api_key():
-    data = request.get_json(force=True)
-    print(data)
-    model_provider = data['model_provider'].lower()
-    model_provider_value = data['api_key']
-    if (model_provider == "openai"):
-        provider_key = "OPENAI_API_KEY"
-    elif (model_provider == "cohere"):
-        provider_key = "COHERE_API_KEY"
-    elif (model_provider == "huggingface"):
-        provider_key = "HF_API_KEY"
-    elif (model_provider == "forefront"):
-        provider_key = "FOREFRONT_API_KEY"
-    else:
-        provider_key = "UNKNOWN_API_KEY"
-    set_key(DOTENV_FILE, provider_key, model_provider_value)
-
-    response = jsonify({'status': 'success'})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    return response
-
-@app.route('/api/check-key-store', methods=['GET'])
-def check_key_store():
-    '''
-    Checks all the API keys stored in the .env file - matches against the providers in models.json
-    Model must have "api_key" field set to true in models.json, otherwise "None" is returned
-    Keys are stored in .env in {PROVIDER}_API_KEY format
-    '''
-    models_json = json.load(open('models.json',))
-    # for i, model_promodels_json.keys()
-
-    response = {}
-    for provider in models_json.keys():
-        if (provider == "default"): 
-            continue
-        else:
-            provider_key = provider.upper() + "_API_KEY"
-
-        if models_json[provider]["api_key"] == False:
-            # return empty if key not needed
-            warnings.warn("warning: no API key needed for provider " + provider)
-            response[provider] = "None"
-        elif os.environ.get(provider_key) is None:
-            warnings.warn("warning: no API key found for provider " + provider)
-            # return empty is key not found
-            response[provider] = ""
-        else:
-            # return key
-            response[provider] = os.environ.get(provider_key)
-
-    response = jsonify(response)
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    return response
 
 def create_response_message(message: str, status_code: int) -> Response:
     response = jsonify({'status': message})
@@ -271,6 +215,84 @@ def all_models():
 
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
+
+# Routes to store, reload, and check API keys
+# Store API key in .env file, for given provider
+@app.route('/api/store-api-key', methods=['POST'])
+def store_api_key():
+    data = request.get_json(force=True)
+    print(data)
+    model_provider = data['model_provider'].lower()
+    model_provider_value = data['api_key']
+    if (model_provider == "openai"):
+        provider_key = "OPENAI_API_KEY"
+    elif (model_provider == "cohere"):
+        provider_key = "COHERE_API_KEY"
+    elif (model_provider == "huggingface"):
+        provider_key = "HF_API_KEY"
+    elif (model_provider == "forefront"):
+        provider_key = "FOREFRONT_API_KEY"
+    else:
+        provider_key = "UNKNOWN_API_KEY"
+    set_key(DOTENV_FILE, provider_key, model_provider_value)
+
+    response = jsonify({'status': 'success'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
+@app.route('/api/check-key-store', methods=['GET'])
+def check_key_store():
+    '''
+    Checks all the API keys stored in the .env file - matches against the providers in models.json
+    Model must have "api_key" field set to true in models.json, otherwise "None" is returned
+    Keys are stored in .env in {PROVIDER}_API_KEY format
+    '''
+    models_json = json.load(open('models.json',))
+    # for i, model_promodels_json.keys()
+
+    response = {}
+    for provider in models_json.keys():
+        if (provider == "default"): 
+            continue
+        else:
+            provider_key = provider.upper() + "_API_KEY"
+
+        if models_json[provider]["api_key"] == False:
+            # return empty if key not needed
+            warnings.warn("warning: no API key needed for provider " + provider)
+            response[provider] = "None"
+        elif os.environ.get(provider_key) is None:
+            warnings.warn("warning: no API key found for provider " + provider)
+            # return empty is key not found
+            response[provider] = ""
+        else:
+            # return key
+            response[provider] = os.environ.get(provider_key)
+
+    response = jsonify(response)
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
+@app.route('/api/get-models-in-cache', methods=['GET'])
+def get_models_in_cache():
+    models = []
+    cache_list = scan_cache_dir()
+    for r in cache_list.repos:
+        if r.repo_type == "model":
+            models.append(r.repo_id)
+    response = jsonify({'models': models})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
+def download_model(model_name: str):
+    print("Downloading model")
+    try:
+        hf_hub_download(repo_id=model_name, filename="pytorch_model.bin") # do we need to add cache dir?
+    except Exception as e:
+        print("Error occured")
+        print(e)
+    print("Model downloaded")
+    return True
 
 CORS(app)
 

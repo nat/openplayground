@@ -509,7 +509,52 @@
         }
     },
     "forefront": {
-        "api_key": true
+        "api_key": true,
+        "models": {
+            "gpt-j": {
+                "parameters": {
+                    "temperature": {
+                        "value": 1.0,
+                        "range": [
+                            0.1,
+                            1.0
+                        ]
+                    },
+                    "maximum_length": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            1024
+                        ]
+                    },
+                    "top_p": {
+                        "value": 1.0,
+                        "range": [
+                            0.1,
+                            1.0
+                        ]
+                    },
+                    "top_k": {
+                        "value": 1,
+                        "range": [
+                            1,
+                            500
+                        ]
+                    },
+                    "repetition_penalty": {
+                        "value": 1.0,
+                        "range": [
+                            0.0,
+                            2.0
+                        ]
+                    },
+                    "stop_sequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            }
+        }
     },
     "aleph-alpha": {
         "api_key": true
