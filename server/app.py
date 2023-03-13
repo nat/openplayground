@@ -316,7 +316,7 @@ InferenceFunction = Callable[[str, InferenceRequest], None]
 
 class InferenceAnnouncer:
     def __init__(self, sse_client):
-        self.sse_client = SSE_MANAGER
+        self.sse_client = sse_client
         self.cancel_cache = cachetools.TTLCache(maxsize=1000, ttl=60)
 
     def __format_message__(self, event: str, infer_result: InferenceResult) -> str:
@@ -853,7 +853,7 @@ class InferenceManager:
 
 class ModelManager:
     def __init__(self, sse_client):
-        self.sse_client = SSE_MANAGER
+        self.sse_client = sse_client
         self.local_cache = {}
         self.inference_manager = InferenceManager(sse_client)
         self.models_json = json.load(open('models.json',))

@@ -1,7 +1,7 @@
 import React from "react"
 import Playground from "./pages/playground"
 import Compare from "./pages/compare"
-import About from "./pages/about"
+import Settings from "./pages/settings"
 import {
   BrowserRouter,
   Route,
@@ -39,10 +39,10 @@ function RoutesProvider() {
             }
           />
           <Route
-            path="/about"
+            path="/settings"
             element={
               <>
-                  <About />
+                  <Settings />
                   <Toaster />
               </>
             }

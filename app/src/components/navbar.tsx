@@ -41,19 +41,19 @@ export default function NavBar({ tab, children }: any) {
           </Link>
         </div>
         <div className="align-middle mt-1 flex items-center">
-          <Link to="/about" className={
-                tab === "about"
+          <Link to="/settings" className={
+                tab === "settings"
                   ? "cursor-default"
                   : "cursor-pointer"
               }>
             <p
               className={
-                tab === "about"
+                tab === "settings"
                   ? "text-xl font-semibold"
                   : "text-xl font-medium text-gray-500 hover:text-gray-900"
               }
             >
-              About
+              Settings
             </p>
           </Link>
         </div>
