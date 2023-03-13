@@ -1,461 +1,61 @@
+import gevent
+from gevent import monkey
+monkey.patch_all()
+
 import json
-import logging
 import os
 import time
-import warnings
-from flask import Flask, request, jsonify, Response, send_from_directory, stream_with_context
-from flask_cors import CORS
-import numpy as np
+import cachetools
 import requests
-import transformers
-from transformers import AutoTokenizer, AutoConfig, PreTrainedModel, PreTrainedTokenizer, StoppingCriteria, StoppingCriteriaList
-from huggingface_hub import hf_hub_download, try_to_load_from_cache, scan_cache_dir, _CACHED_NO_EXIST
-from dotenv import load_dotenv, set_key, unset_key, find_dotenv
-import torch
-import importlib
-import cohere
+import sseclient
+from sse import sse
+import sseserver as sse_server
+import queue
+import math
 import openai
-from message_announcer import MessageAnnouncer
-from generator import greedy_search_generator
-from utils import format_sse, get_num_tokens, format_token_probabilities
-from stoppingcriteria import StoppingCriteriaSub
+import uuid
+import urllib
+import warnings
+
+from datetime import datetime
+from dataclasses import dataclass
+from dotenv import load_dotenv, set_key, unset_key, find_dotenv
+from typing import Callable, List, Union
 from concurrent.futures import ThreadPoolExecutor
-import gc
-import threading
-import psutil
+from flask import Flask, request, jsonify, Response, abort, send_from_directory, stream_with_context
+from flask_cors import CORS
 
-# monkey patch for transformers
-transformers.generation.utils.GenerationMixin.greedy_search = greedy_search_generator
+from transformers import T5Tokenizer
+google_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-xl")
 
-# set up environment
-dotenv_file = find_dotenv()
-if not dotenv_file:
+DOTENV_FILE = find_dotenv()
+if not DOTENV_FILE:
     warnings.warn("No .env file found, using default environment variables, creating one locally")
     f = open(".env", "w")
     f.close()
-    dotenv_file = find_dotenv()
-load_dotenv(override=True) # load file
-    
-# set up flask andcors
-os.environ['TOKENIZERS_PARALLELISM'] = 'true'
-app = Flask(__name__, static_folder='./build')
-CORS(app)
+    DOTENV_FILE = find_dotenv()
+load_dotenv(override=True)
 
-cohere_key = ""
-if "COHERE_API_KEY" in os.environ:
-    cohere_key = os.getenv("COHERE_API_KEY")
-hf_key = ""
-if "HF_API_KEY" in os.environ:
-    hf_key = os.getenv("HF_API_KEY")
+# global sse server manager
+SSE_MANAGER = None
 
-# Set up message announcer for streaming
-ANNOUNCER = MessageAnnouncer() 
-
-# Endpoints
-HUGGINGFACE_ENDPOINT = "https://api-inference.huggingface.co/models"
-
-# Set constants
-MODULE = importlib.import_module("transformers") # dynamic import of module class, AutoModel not good enough for text generation
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu" # suport gpu inference if possible
-MODEL_NAME =  "gpt2" # model name - default to gpt2
-MODEL = None # model class
-TOKENIZER = None # tokenize class
-
-# routes for production build
+app = Flask(__name__, static_folder='../app/dist')
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    if path != "" and os.path.exists(app.static_folder + '/' + path):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
+    if path == "" or not os.path.exists(app.static_folder + '/' + path):
+        path = 'index.html'
 
-# Allow client to establish connection for streaming
-# TODO: REVIEW THREAD SAFETY AND PROCESS SAFETY of this method
-@app.route("/api/listen", methods=["GET"])
-def listen():
-    global ANNOUNCER
-    def stream():
-        messages = ANNOUNCER.listen() # returns a queue.Queue
-        try:
-            while True:
-                msg = messages.get() # blocks until a new message arrives
-                if msg == "[DONE]": break # push dummy message to end connection
-                yield msg
-        except GeneratorExit:
-            print('Generator exit, stopping listener')
-            ANNOUNCER.stop_listening()
-        finally:
-            print('Stream ended, stopping listener')
-            ANNOUNCER.stop_listening()
-    # sending function back, response takes infinite amount of time
-    return Response(stream_with_context(stream()), mimetype='text/event-stream')
+    #if 'br' in request.headers.get('Accept-Encoding', ''):
+    #    path = path + '.br'
+    #elif 'gzip' in request.headers.get('Accept-Encoding', ''):
+    #    path = path + '.gz'
+        
+    return send_from_directory(app.static_folder, path)
 
-'''
-This route handles all the connections for the playground page on the clientside.
-Regardless of token streaming support, we send inference results over SSE
-Any failures or errors are sent as a HTTP response back to client
-'''
-@app.route('/api/playground', methods=['POST'])
-def playground():
-    data = request.get_json(force=True)
-    print(f"Received request for model {data['model_name']}")
-    print(f"Request: {data}")
-    # Model based routing, return is a Response object
-    if data['model_name'].startswith("huggingface:"):
-        return huggingface_remote_playground(data)
-    elif data['model_name'].startswith("openai:"):
-        return openai_playground(data)
-    elif data['model_name'].startswith("cohere:"):
-        return cohere_playground(data)
-    elif data['model_name'].startswith("textgeneration:"):
-        return huggingface_local_playground(data)
-    else:
-        return create_response_message(message=f"Unknown model not supported: {data['model_name']}", status_code=500)
-
-# Huggingface Remote Playground Inference
-def huggingface_remote_playground(data: dict) -> Response:
-    global ANNOUNCER
-    # reload key, in case it has changed since server launch
-    hf_key = os.getenv('HF_API_KEY') 
-    headers = {"Authorization": f"Bearer {hf_key}"}
-    model_name = data['model_name'].removeprefix("huggingface:")
-    formatted_data = {
-        "inputs": data['prompt'],
-        "parameters": {
-            "max_new_tokens": min(data['maximum_length'], 250), # max out at 250 tokens per request, we should handle for this in client side but just in case
-            "temperature": data['temperature'],
-            "top_k": data['top_k'],
-            "top_p": data['top_p'],
-            "repetition_penalty": data['repetition_penalty'],
-        },
-        "options": {
-            "use_cache": False, 
-            "wait_for_model": True, # sometimes longer generation, but prevents us having to re-request when available and it would error out multiple times
-        }
-    }
-    formatted_data = json.dumps(formatted_data)
-    formatted_endpoint = f"{HUGGINGFACE_ENDPOINT}/{model_name}"
-    try:
-        response = requests.request("POST", formatted_endpoint, headers=headers, data=formatted_data)
-        response.raise_for_status()
-    except requests.exceptions.HTTPError as e:
-        return Response(f"HTTP error raised: {e}", status_code=500)
-    except requests.exceptions.Timeout as e:
-        #TODO: set up retry logic, shouldn't need to with wait_for_model but just in case
-        return Response(f"Huggingface Inference API request timed out, try again. Trace: {e}", status_code=500)
-    except requests.exceptions.RequestException as e:
-        return Response(f"Request error: {e}", status_code=500)
-    except Exception as e:
-        return Response(f"Unknown Error {e}", status_code=500)
-    # Can possibly get bad JSON returned either from Huggingface or from our own code
-    try:
-        return_data = json.loads(response.content.decode("utf-8"))
-        outputs = return_data[0]["generated_text"]
-    except ValueError as e:
-        return Response(f"Error parsing response from Huggingface API: {e}", status_code=500)
-
-    # instead of return_full_text, we will manually remove the prompt
-    outputs = outputs.removeprefix(data['prompt'])
-    # Return the sequence as a json object in response
-    if ANNOUNCER.send_message():
-        ANNOUNCER.announce(format_sse(data=outputs))
-        ANNOUNCER.announce("[DONE]")
-    
-    return create_response_message(message="success", status_code=200)
-
-# OpenAI Remote Playground Inference
-def openai_playground(data: dict) -> Response:
-    global ANNOUNCER
-    openai.api_key = os.getenv("OPENAI_API_KEY") # have to do to gurantee reload of key
-    model_name = data['model_name'].removeprefix("openai:")
-    try:
-        response = openai.Completion.create(
-            model=model_name,
-            prompt=data['prompt'],
-            temperature=data['temperature'],
-            max_tokens=data['maximum_length'],
-            top_p=data['top_p'],
-            stop=data['stop'],
-            frequency_penalty=data['frequency_penalty'], # TODO: add
-            presence_penalty=data['presence_penalty'], # TODO: add
-            stream=True,
-            logprobs=5
-        )
-    except openai.error.Timeout as e:
-        #Handle timeout error, e.g. retry or log
-        return create_response_message(f"OpenAI API request timed out: {e}", status_code=500)
-    except openai.error.APIError as e:
-        #Handle API error, e.g. retry or log
-        return create_response_message(f"OpenAI API returned an API Error: {e}", status_code=500)
-    except openai.error.APIConnectionError as e:
-        #Handle connection error, e.g. check network or log
-        return create_response_message(f"OpenAI API request failed to connect: {e}", status_code=500)
-    except openai.error.InvalidRequestError as e:
-        #Handle invalid request error, e.g. validate parameters or log
-        return create_response_message(f"OpenAI API request was invalid: {e}", status_code=500)
-    except openai.error.AuthenticationError as e:
-        #Handle authentication error, e.g. check credentials or log
-        return create_response_message(f"OpenAI API request was not authorized: {e}", status_code=500)
-    except openai.error.PermissionError as e:
-        #Handle permission error, e.g. check scope or log
-        return create_response_message(f"OpenAI API request was not permitted: {e}", status_code=500)
-    except openai.error.RateLimitError as e:
-        #Handle rate limit error, e.g. wait or log
-        return create_response_message(f"OpenAI API request exceeded rate limit: {e}", status_code=500)
-    except Exception as e:
-        # Unknown handle for it here
-        return create_response_message(f"Unknown Error {e}", status_code=500)
-
-    # stream tokens to client
-    full_response = []
-    for event in response:
-        if not ANNOUNCER.send_message(): break # stop if cancel sent by client
-        event_text = event['choices'][0]['text']
-        # instead of erroring out, return -1 for logprob
-        try:
-            token_probs = format_token_probabilities(event['choices'][0]["logprobs"]['top_logprobs'][0], chosen_token=event_text, model_tag="openai")
-            full_response.append(event_text)
-            msg = format_sse(data=event_text, prob=token_probs)
-        except IndexError:
-            msg = format_sse(data=event_text, prob=-1)
-        time.sleep(0.075)
-        ANNOUNCER.announce(msg) # send message out to all listeners
-    
-    print("".join(full_response))
-    # if stream finished, want to close connection
-    if ANNOUNCER.send_message():
-        ANNOUNCER.announce("[DONE]")
-    
-    return create_response_message(message="success", status_code=200)
-
-# Cohere Playground Inference
-def cohere_playground(data: dict) -> Response:
-    # using CURL to support streaming - early release
-    global cohere_key, ANNOUNCER
-    headers = {
-        "Authorization": f"Bearer {cohere_key}",
-        "Content-Type": "application/json",
-        "Cohere-Version": "2021-11-08",
-    }
-    data = {
-        "prompt": data['prompt'],
-        "model": data['model_name'].removeprefix("cohere:"),
-        "temperature": float(data['temperature']),
-        "p": float(data['top_p']),
-        "k": int(data['top_k']),
-        "stop": data['stop'],
-        "frequency_penalty": float(data['frequency_penalty']),
-        "presence_penalty": float(data['presence_penalty']),
-        "return_likelihoods": "GENERATION",
-        "max_tokens": int(data['maximum_length']),
-        "stream": True,
-    }
-    data = json.dumps(data)
-    full_response = []
-    try:
-        print(cohere_key)
-        with requests.post("https://api.cohere.ai/generate", headers=headers, data=data, stream=True) as response:
-            for token in response.iter_lines():
-                token = token.decode('utf-8')
-                token_json = json.loads(token)
-                token_probs = format_token_probabilities(token_json, chosen_token=token_json['token'], model_tag="cohere")
-                print(token_probs)
-                if not ANNOUNCER.send_message(): break
-                ANNOUNCER.announce(format_sse(data=token_json['token'], prob=token_probs))
-                full_response.append(token_json['token'])
-                time.sleep(0.075)
-    except requests.exceptions.HTTPError as e:
-        return Response(f"HTTP error raised: {e}", status_code=500)
-    except requests.exceptions.Timeout as e:
-        #TODO: set up retry logic, shouldn't need to with wait_for_model but just in case
-        return Response(f"Cohere API request timed out, try again. Trace: {e}", status_code=500)
-    except requests.exceptions.RequestException as e:
-        return Response(f"Request error: {e}", status_code=500)
-    except Exception as e:
-        return create_response_message(message=f"Unknown Error {e}", status_code=500)
-    
-    print("".join(full_response))
-    # cancel might have been sent while waiting for response
-    if ANNOUNCER.send_message():
-        # ANNOUNCER.announce(format_sse(data=response.generations[0].text))
-        ANNOUNCER.announce("[DONE]")
-
-    return create_response_message(message="success", status_code=200)
-
-# Huggingface Local Inference
-def huggingface_local_playground(data: dict) -> Response:
-    global MODEL, TOKENIZER, ANNOUNCER
-    # set up stop sequences
-    stopping_criteria = None
-    stop_sequences = data['stop']
-    if stop_sequences:
-        stop_words_ids = [TOKENIZER.encode(stop_word) for stop_word in stop_sequences]
-        stopping_criteria = StoppingCriteriaList([StoppingCriteriaSub(stops=stop_words_ids)])
-    print(stopping_criteria)
-    # set up inputs and tokenize
-    inputs_str = data['prompt'].strip()
-    inputs = TOKENIZER(inputs_str, return_tensors="pt")
-    input_ids = inputs['input_ids'].to(DEVICE)
-    attention_mask = inputs['attention_mask'].to(DEVICE)
-    # generate outputs
-    try:
-        outputs = MODEL.generate(inputs=input_ids, 
-            attention_mask=attention_mask, 
-            max_new_tokens=data['maximum_length'], # max length of sequence
-            temperature=data['temperature'], # randomness of model
-            top_k=data['top_k'], # top k sampling
-            top_p=data['top_p'], # top p sampling
-            repetition_penalty=data['repetition_penalty'], # penalty for repeating words
-            output_scores=True, 
-            early_stopping=False,
-            stopping_criteria=stopping_criteria if stopping_criteria else None,
-            return_dict_in_generate=True,
-        )
-    except Exception as e:
-        return create_response_message(message=f"Local Inference failed with error {e}", status_code=500)
-    
-    tokenizer_for_probs = AutoTokenizer.from_pretrained(MODEL_NAME, padding_side="left")
-    curr_token = ""
-    sentence = "<|endoftext|>"
-    first_token = True
-    for output in outputs:
-        next_token, next_input_ids, next_scores = output
-        if len(next_token.size()) > 1: continue # skip the last generated full array
-        if not ANNOUNCER.send_message(): break # stop if cancel sent by client
-        curr = TOKENIZER.convert_ids_to_tokens(next_token, skip_special_tokens=True)
-
-        # get probabilities
-        transition_scores = MODEL.compute_transition_scores(next_input_ids, next_scores, normalize_logits=True)
-        input_length = 1 if MODEL.config.is_encoder_decoder else inputs.input_ids.shape[1]
-        generated_tokens = next_input_ids[:, input_length:]
-        tok = generated_tokens[0][-1]
-        score = transition_scores[0][-1].detach().numpy()
-        token_probs = format_token_probabilities({"logprob" : score.item()}, TOKENIZER.decode(next_token), "hf_local")
-        print(token_probs)
-            
-        if (curr):
-            curr = curr[0] # string with special character potentially
-            time.sleep(0.05) # keep it consistent across models
-            if (curr[0] == "Ġ"): # BPE tokenizer
-                # dispatch old token because we have a new one
-                curr_token = curr_token.replace("Ċ", "\n")
-                curr_token = curr.replace("Ġ", " ")
-                sentence += curr_token # we can yield here/print here
-                msg = format_sse(data=curr_token, prob=format_token_probabilities({"logprob" : score.item()}, curr_token, "hf_local"), model_name=MODEL_NAME)
-                ANNOUNCER.announce(msg) # send message out to all listeners
-                # BPE
-            elif (curr[0] == "▁"): # sentence piece tokenizer
-                # dispatch old token because we have a new one
-                if first_token:
-                    curr_token = curr.replace("▁", "")
-                    first_token = False
-                else:
-                    curr_token = curr.replace("▁", " ")
-                sentence += curr_token # we can yield here/print here
-                msg = format_sse(data=curr_token, prob=format_token_probabilities({"logprob" : score.item()}, curr_token, "hf_local"), model_name=MODEL_NAME)
-                ANNOUNCER.announce(msg) # send message out to all listeners
-            else:
-                # append to previous token
-                curr_token = curr
-                curr_token = curr_token.replace("Ċ", "\n")
-                msg = format_sse(data=curr_token, prob=format_token_probabilities({"logprob" : score.item()}, curr_token, "hf_local"), model_name=MODEL_NAME)
-                ANNOUNCER.announce(msg)
-                print(f'CURR: {curr}')
-                sentence += curr_token
-            
-            curr_token = ""
-
-    print(sentence)
-    # dispatch last token, if we can
-    if ANNOUNCER.send_message():
-        if curr_token: ANNOUNCER.announce(format_sse(data=curr_token)) # send only if non empty
-        ANNOUNCER.announce("[DONE]")
-
-    # done send last message, this will close the connection
-    return create_response_message(message="success", status_code=200)
-
-def create_response_message(message: str, status_code: int) -> Response:
-    response = jsonify({'status': message})
-    response.status_code = status_code
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    return response
-
-# Initial call to setup model for inference, only called once. If model is already held in memory we can return it directly
-@app.route('/api/setup-model', methods=['POST'])
-def setup_model():
-    global MODEL, MODEL_NAME, TOKENIZER
-    data = request.get_json(force=True) # paramters given in json format
-    data["model_name"] = data["model_name"].removeprefix("textgeneration:")
-    if MODEL and MODEL.config._name_or_path == data['model_name']:
-        # Model already loaded in memory
-        MODEL_NAME = data['model_name']
-        response = jsonify({'status': 'success'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-    else:
-        # Load model from transformers library
-        MODEL, TOKENIZER = load_model(data['model_name'])
-        MODEL_NAME = data['model_name']
-        # return response
-        response = jsonify({'status': 'success'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-
-# Download model for inference
-@app.route('/api/download-model', methods=['POST'])
-def request_model_download():
-    data = request.get_json(force=True)
-    print(data)
-    model_name = data['model_name'].removeprefix("textgeneration:")
-    filepath = try_to_load_from_cache(model_name, filename="pytorch_model.bin")
-    if isinstance(filepath, str):
-        response = jsonify({'status': 'already downloaded'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-    else:
-        download_model(model_name)
-        response = jsonify({'status': 'success'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-
-
-# Routes to check models in cache and download them in the background if requested
-@app.route('/api/model-in-cache', methods=['GET'])
-def check_model_in_cache():
-    data = request.args.get('model')
-    print(data)
-    model_name = data.removeprefix("textgeneration:")
-    filepath = try_to_load_from_cache(model_name, filename="pytorch_model.bin")
-    if isinstance(filepath, str):
-        response = jsonify({'status': 'success'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-    elif filepath is _CACHED_NO_EXIST:
-        response = jsonify({'status': 'failure'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-
-@app.route('/api/get-models-in-cache', methods=['GET'])
-def get_models_in_cache():
-    models = []
-    cache_list = scan_cache_dir()
-    for r in cache_list.repos:
-        if r.repo_type == "model":
-            models.append(r.repo_id)
-    response = jsonify({'models': models})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    return response
-
-def download_model(model_name: str):
-    print("Downloading model")
-    try:
-        hf_hub_download(repo_id=model_name, filename="pytorch_model.bin") # do we need to add cache dir?
-    except Exception as e:
-        print("Error occured")
-        print(e)
-    print("Model downloaded")
-    return True
+@app.route('/hello')
+def hello():
+    return "Hello World!"
 
 # Routes to store, reload, and check API keys
 # Store API key in .env file, for given provider
@@ -464,17 +64,18 @@ def store_api_key():
     data = request.get_json(force=True)
     print(data)
     model_provider = data['model_provider'].lower()
-    model_provider_key = data['api_key']
+    model_provider_value = data['api_key']
     if (model_provider == "openai"):
-        model_provider = "OPENAI_API_KEY"
-    elif (model_provider == "co:here"):
-        model_provider = "COHERE_API_KEY"
-    elif (model_provider == "huggingface hosted"):
-        model_provider = "HF_API_KEY"
+        provider_key = "OPENAI_API_KEY"
+    elif (model_provider == "cohere"):
+        provider_key = "COHERE_API_KEY"
+    elif (model_provider == "huggingface"):
+        provider_key = "HF_API_KEY"
+    elif (model_provider == "forefront"):
+        provider_key = "FOREFRONT_API_KEY"
     else:
-        model_provider = "UNKNOWN_API_KEY"
-    set_key(dotenv_file, model_provider, model_provider_key)
-    reload_clients(data['model_provider'].lower())
+        provider_key = "UNKNOWN_API_KEY"
+    set_key(DOTENV_FILE, provider_key, model_provider_value)
 
     response = jsonify({'status': 'success'})
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -488,418 +89,834 @@ def check_key_store():
     for i, model_provider in enumerate(data['model_provider']):
         model_provider = model_provider.lower()
         if (model_provider == "openai"):
-            model_provider = "OPENAI_API_KEY"
-        elif (model_provider == "co:here"):
-            model_provider = "COHERE_API_KEY"
-        elif (model_provider == "huggingface hosted"):
-            model_provider = "HF_API_KEY"
+            provider_key = "OPENAI_API_KEY"
+        elif (model_provider == "cohere"):
+            provider_key = "COHERE_API_KEY"
+        elif (model_provider == "huggingface"):
+            provider_key = "HF_API_KEY"
+        elif (model_provider == "forefront"):
+            provider_key = "FOREFRONT_API_KEY"
         else:
-            model_provider = "UNKNOWN_API_KEY"
+            provider_key = "UNKNOWN_API_KEY"
         key = data['model_provider'][i]
-        if os.environ.get(model_provider) is None:
+        if os.environ.get(provider_key) is None:
             # return empty is key not found
             response[key] = ""
         else:
             # return key if found
-            response[key] = os.getenv(model_provider)
+            response[key] = os.getenv(provider_key)
 
     response = jsonify(response)
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
-# ensure api keys are updated
-def reload_clients(model_provider: str):
-    global cohere_key
-    global hf_key
-    load_dotenv(override=True) # reload .env file
-    if (model_provider == "openai"):
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-    elif (model_provider == "co:here"):
-        cohere_key = os.getenv('COHERE_API_KEY')
-        print("updated: ", cohere_key)
-    elif (model_provider == "HuggingFace Hosted"):
-        hf_key = os.getenv("HF_API_KEY")
+def create_response_message(message: str, status_code: int) -> Response:
+    response = jsonify({'status': message})
+    response.status_code = status_code
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
 
-# Helper function to load model from transformers library
-def load_model(model_name: str)-> tuple([PreTrainedModel, PreTrainedTokenizer]):
-    '''
-    Load model from transformers library
-    dynamically instantiates the right model class for text generation from model config architecture
-    '''
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    config = AutoConfig.from_pretrained(model_name) # load config for model
-    model_class = getattr(MODULE, config.architectures[0]) # get model class from config
-    model = model_class.from_pretrained(model_name, config=config) # dynamically load right model class for text generation
-
-    param_size = 0
-    for param in model.parameters():
-        param_size += param.nelement() * param.element_size()
-    buffer_size = 0
-    for buffer in model.buffers():
-        buffer_size += buffer.nelement() * buffer.element_size()
-
-    size_all_mb = (param_size + buffer_size) / 1024**2
-    print('model size: {:.3f}MB'.format(size_all_mb))
-
-    if DEVICE == 'cuda':
-        device_memory = torch.cuda.get_device_properties(0).total_memory / 1024**2
-    else:
-        device_memory = psutil.virtual_memory().total / 1024**2
-
-    print('device memory: {:.3f}MB'.format(device_memory))
-
-    if size_all_mb > device_memory * 0.95: #some padding
-        raise Exception('Model size is too large for host to run inference on')
+@sse.before_request
+def check_access():
+    print("checking for access", request)
+    if request.method == 'OPTIONS':
+        return create_response_message("OK", 200)
     
-    model.to(DEVICE) # gpu inference if possible
-    return model, tokenizer
-
-def open_ai_completion(model_data, prompt, uuid):
-    try:
-        global ANNOUNCER
-        openai.api_key = os.environ['OPENAI_API_KEY']
-        model_name, model_tag, parameters = model_data
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[INITIALIZING]"
-        ))
-
-        response =  openai.Completion.create(
-            model=model_name.removeprefix("openai:"),
-            prompt=prompt,
-            **parameters,
-            frequency_penalty=0, # TODO: add
-            presence_penalty=0, # TODO: add
-            stream=True,
-            logprobs=3
-        )
-
-        for event in response:
-            if not ANNOUNCER.send_message(): break # stop if cancel sent by client
-            event_text = event['choices'][0]['text']
-            msg = format_sse(   
-                model_tag=model_tag,
-                model_name=model_name,
-                data=event_text,
-                prob=event['choices'][0]['logprobs']['token_logprobs'][0]
-            )
-            time.sleep(0.05)
-            ANNOUNCER.announce(msg) # send message out to all listeners
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[COMPLETED]"
-        ))
-    except Exception as e:
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data=f"[ERROR] {e}"
-        ))
-        print(e)
-
-def cohere_completion(model_data, prompt, uuid):
-    try:
-        global co, ANNOUNCER
-        co = cohere.Client(os.environ['COHERE_API_KEY'])
-        model_name, model_tag, parameters = model_data
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[INITIALIZING]"
-        ))
-
-        start_time = time.time()
-
-        response = co.generate(
-            model=model_name.removeprefix("cohere:"),
-            prompt=prompt.strip(),
-            **parameters
-        )
-
-        response_txt = response.generations[0].text
-        [_ for _ in response_txt] # force evaluation of response
-        end_time = time.time()
-        tokenized_results = co.tokenize(response.generations[0].text)
-
-        total_seconds_elapsed = end_time - start_time
-        tokens_per_second = len(tokenized_results.tokens) / total_seconds_elapsed
-
-        for token in tokenized_results.token_strings:
-            if not ANNOUNCER.send_message(): break
-            ANNOUNCER.announce(format_sse(  
-                model_name=model_name, 
-                model_tag=model_tag,
-                data=token
-            ))
-            time.sleep(1/tokens_per_second)
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[COMPLETED]"
-        ))
-    except Exception as e:
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data=f"[ERROR] {e}"
-        ))
-        print(e)
-
-    return response.generations[0].text
-
-def huggingface_completion(model_data, prompt, uuid): 
-    try:
-        global hf_key, ANNOUNCER
-        hf_key = os.environ['HF_API_KEY']
-        model_name, model_tag, parameters = model_data
-        
-        model_name_no_prefix = model_name.removeprefix("huggingface:")
-        headers = {"Authorization": f"Bearer {hf_key}"}
-        API_URL = f"https://api-inference.huggingface.co/models/{model_name_no_prefix}"
-        data = {
-            "inputs":     prompt,
-            "parameters": parameters,
-            "options": {
-                "use_cache": False,
-                "wait_for_model": True,
-            }
-        }
-        data = json.dumps(data)
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[INITIALIZING]"
-        ))
-
-        response = requests.request("POST", API_URL, headers=headers, data=data)
-        return_data = json.loads(response.content.decode("utf-8"))
-        #print("returned data", return_data)
-        if "error" in return_data:
-            raise Exception(return_data["error"])
-        outputs = return_data[0]["generated_text"]
-
-        for word in [outputs[i:i+4] for i in range(0, len(outputs), 4)]:
-            if not ANNOUNCER.send_message(): break # stop if cancel sent by client
-            msg = format_sse(data=word, model_tag=model_tag, model_name=model_name)
-            time.sleep(0.05)
-            ANNOUNCER.announce(msg) # send message out to all listeners
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[COMPLETED]"
-        ))
-    except Exception as e:
-        print("Error: ", e)
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data=f"[ERROR] {e}"
-        ))
-
-def local_completion(model_name, model_tag, parameters, prompt, uuid):
-    try:
-        global ANNOUNCER
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[INITIALIZING]"
-        ))
-        MODEL, TOKENIZER = load_model(model_name.removeprefix("textgeneration:"))
-
-        # set up stop sequences
-        stopping_criteria = None
-        stop_sequences = parameters['stop']
-        if stop_sequences:
-            stop_words_ids = [TOKENIZER.encode(stop_word) for stop_word in stop_sequences]
-            stopping_criteria = StoppingCriteriaList([StoppingCriteriaSub(stops=stop_words_ids)])
-        print(stopping_criteria)
-        # set up inputs and tokenize
-        inputs_str = prompt.strip()
-        inputs = TOKENIZER(inputs_str, return_tensors="pt")
-        input_ids = inputs['input_ids'].to(DEVICE)
-        attention_mask = inputs['attention_mask'].to(DEVICE)
-        # generate outputs
-
-        outputs = MODEL.generate(inputs=input_ids, 
-            attention_mask=attention_mask, 
-            max_new_tokens=parameters['maximum_length'], # max length of sequence
-            temperature=parameters['temperature'], # randomness of model
-            top_k=parameters['top_k'], # top k sampling
-            top_p=parameters['top_p'], # top p sampling
-            repetition_penalty=parameters['repetition_penalty'], # penalty for repeating words
-            output_scores=True, 
-            early_stopping=False,
-            stopping_criteria=stopping_criteria if stopping_criteria else None,
-        )
-
-        curr_token = ""
-        sentence = ""
-        first_token = True
-        for output in outputs:
-            if len(output.size()) > 1: continue # skip the last generated full array
-            if not ANNOUNCER.send_message(): break # stop if cancel sent by client
-            curr = TOKENIZER.convert_ids_to_tokens(output[0], skip_special_tokens=True)
-            if (curr):
-                curr = curr[0] # string with special character potentially
-                time.sleep(0.05) # keep it consistent across models
-                if (curr[0] == "Ġ"): # BPE tokenizer
-                    # dispatch old token because we have a new one
-                    curr_token = curr_token.replace("Ċ", "\n")
-                    sentence += curr_token # we can yield here/print here
-                    msg = format_sse(data=curr_token, model_tag=model_tag, model_name=model_name)
-                    ANNOUNCER.announce(msg) # send message out to all listeners
-                    # BPE
-                    curr_token = curr.replace("Ġ", " ")
-                elif (curr[0] == "▁"): # sentence piece tokenizer
-                    # dispatch old token because we have a new one
-                    sentence += curr_token # we can yield here/print here
-                    msg = format_sse(data=curr_token, model_tag=model_tag, model_name=model_name)
-                    ANNOUNCER.announce(msg) # send message out to all listeners
-                    if first_token:
-                        curr_token = curr.replace("▁", "")
-                        first_token = False
-                    else:
-                        curr_token = curr.replace("▁", " ")
-                else:
-                    # append to previous token
-                    curr_token += curr
-
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data="[COMPLETED]"
-        ))
-    except RuntimeError as e:
-        error_message = str(e)
-        if "CUDA out of memory" in str(e):
-            error_message = "CUDA out of memory"
-            print(e)
-            
-        ANNOUNCER.announce(format_sse(   
-             model_tag=model_tag,
-            model_name=model_name,
-            data=f"[ERROR] {error_message}"
-        ))
-    except Exception as e:
-        ANNOUNCER.announce(format_sse(   
-            model_tag=model_tag,
-            model_name=model_name,
-            data=f"[ERROR] {e}"
-        ))
-        print(e)
-    finally:
-        gc.collect()
-        torch.cuda.empty_cache()
-
-def bulk_completion(tasks, prompt, uuid):
-    global ANNOUNCER
-    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-        futures = []
-
-        for (completion_function, model, tag, params) in tasks:
-            if completion_function == local_completion:
-                local_completion(model, tag, params, prompt, uuid)
-            else:
-                futures.append(executor.submit(completion_function, (model, tag, params), prompt, uuid))
-
-        results =  [future.result() for future in futures]
-        return results
-        
-@app.route('/api/compare', methods=['POST'])
-def compare():
-    global ANNOUNCER
     data = request.get_json(force=True)
-    print(data)
-    uuid   = data['uuid']
+    print(f"Request: {data}")
+
+    if not isinstance(data['prompt'], str) or not isinstance(data['models'], list):
+        return create_response_message("Invalid request", 400)
+    
+    request_uuid = str(uuid.uuid4())
+    request.data = json.dumps({"uuid": request_uuid})
+
     prompt = data['prompt']
     models = data['models']
-    models_by_type = {
-        "openai": [],
-        "cohere": [],
-        "huggingface": [],
-        "textgeneration": []
-    }
+    providers = ["openai", "cohere", "huggingface", "forefront", "textgeneration", "anthropic"]
+
+    all_tasks = []
+    models_name_provider = []
 
     for model in models:
         name = model['name']
-        tag  = model['tag']
+        provider = model['provider']
+        tag = model['tag']
         parameters = model['parameters']
-        if name.startswith("openai"):
-            models_by_type['openai'].append((name, tag, parameters))
-        elif name.startswith("cohere"):
-            models_by_type['cohere'].append((name, tag, parameters))
-        elif name.startswith("huggingface"):
-            models_by_type['huggingface'].append((name, tag, parameters))
-        elif name.startswith("textgeneration"):
-            models_by_type['textgeneration'].append((name, tag, parameters))
 
-    all_tasks = []
+        if not isinstance(name, str) or not isinstance(tag, str) or not isinstance(parameters, dict):
+            continue
+        
+        if provider not in providers:
+            continue
+        
+        models_name_provider.append({"name": model['name'], "provider": model['provider']})
 
-    for name, tag, parameters in models_by_type['openai']:
-        sanitized_params = {k: parameters[k] for k in ["temperature", "top_p" ]} # "stop"
-        sanitized_params['max_tokens'] = parameters['maximum_length']
+        required_parameters = []
+        sanitized_params = {}
+        if provider == "openai":
+            name = name.removeprefix("openai:")
+            required_parameters = ["temperature", "top_p", "maximum_length", "stop_sequences", "frequency_penalty", "presence_penalty", "stop_sequences"]
+        elif provider == "cohere":
+            name = name.removeprefix("cohere:")
+            required_parameters = ["temperature", "top_p", "top_k", "maximum_length", "presence_penalty", "frequency_penalty", "stop_sequences"]
+        elif provider == "huggingface":
+            name = name.removeprefix("huggingface:")
+            required_parameters = ["temperature", "top_p", "top_k", "repetition_penalty", "maximum_length", "stop_sequences"]
+        elif provider == "forefront":
+            name = name.removeprefix("forefront:")
+            required_parameters = ["temperature", "top_p", "top_k", "repetition_penalty", "maximum_length", "stop_sequences"]
+        elif provider == "textgeneration":
+            name = name.removeprefix("textgeneration:")
+            required_parameters = ["temperature", "top_p",  "top_k", "repetition_penalty", "maximum_length"]
+        elif provider == "anthropic":
+            name = name.removeprefix("anthropic:")
+            required_parameters = ["temperature", "top_p",  "top_k", "maximum_length", "stop_sequences"]
 
-        all_tasks.append((open_ai_completion, name, tag, sanitized_params))
+        for param in required_parameters:
+            if param not in parameters:
+                return create_response_message(f"Missing required parameter: {name} - {provider} - {param}", 400)
 
-    for name, tag, parameters in models_by_type['huggingface']:
-        sanitized_params = {k: parameters[k] for k in ["temperature", "top_p", "top_k" , "repetition_penalty"]}
-        sanitized_params['max_length'] = parameters['maximum_length']
+            if param == "stop_sequences":
+                if parameters[param] is None:
+                    parameters[param] = []
+                if (not isinstance(parameters[param], list) and not parameters[param] == None):
+                    return create_response_message(f"Invalid stop_sequences parameter", 400)
+            elif not isinstance(parameters[param], (int, float)) and not (isinstance(parameters[param], str) and parameters[param].replace('.', '').isdigit()):
+                return create_response_message(f"Invalid parameter: {param} - {name}", 400)
+            
+            sanitized_params[param] = parameters[param]
 
-        all_tasks.append((huggingface_completion, name, tag, sanitized_params))
+        all_tasks.append(InferenceRequest(
+            uuid=request_uuid, model_name=name, model_tag=tag, model_provider=provider,
+            model_parameters=sanitized_params, prompt=prompt)
+        )
 
-    for name, tag, parameters in models_by_type['cohere']:
-        sanitized_params = {k: parameters[k] for k in ["temperature", "presence_penalty", "frequency_penalty", "stop_sequences"]}
-        sanitized_params['max_tokens'] = parameters['maximum_length']
-        sanitized_params['p'] = parameters['top_p']
-        sanitized_params['k'] = parameters['top_k']
+    if len(all_tasks) > 0:
+        gevent.spawn(bulk_completions, all_tasks) #lock
+        #else:
+        #return create_response_message("Too many pending requests", 429)
+    else:
+        print("sending response back")
+        return create_response_message("I see you", 500)
 
-        all_tasks.append((cohere_completion, name, tag, sanitized_params))
+@app.route('/api/all_models', methods=['GET'])
+def all_models():
+    print("recieved request for all models")
+    providers = ["forefront", "anthropic", "textgeneration", "huggingface", "cohere", "openai"]
+    models_by_provider = {}
+    for provider in providers:
+        models_by_provider[provider] = []
+
+    models = GlobalState.model_manager.get_all_models_with_parameters()
+
+    for model_tag in models:
+        model = models[model_tag]
+        models_by_provider[model['provider']].append((model_tag, model))
+
+    sorted_models = {}
     
-    for name, tag, parameters in models_by_type['textgeneration']:
-        sanitized_params = {k: parameters[k] for k in ["temperature", "top_p", "top_k" , "repetition_penalty", "maximum_length"]}
-        sanitized_params['stop'] = parameters['stop_sequences']
-        all_tasks.append((local_completion, name, tag, sanitized_params))
+    for provider in providers:
+        for modal_tag, model in sorted(models_by_provider[provider], key=lambda x: x[1]['name']):
+            sorted_models[modal_tag] = model
 
-    if len(all_tasks) > 0: bulk_completion(all_tasks, prompt, uuid)
+    response = app.response_class(
+        response=json.dumps(sorted_models),
+        status=200,
+        mimetype='application/json'
+    )
 
-
-    if ANNOUNCER.send_message():
-        ANNOUNCER.announce("[DONE]")
-
-    response = jsonify({})
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
-@app.route('/api/models_defaults', methods=['POST'])
-def models_defaults():
-    data = request.get_json(force=True)
-    print(data)
-    models = data['models']
-    models_defaults = {}
-    response = {}
+app.register_blueprint(sse, url_prefix='/api/stream')
 
-    #change this later so that its kept in memory
-    with open('models_optimal_defaults.json') as json_file:
-        models_defaults = json.load(json_file)
+CORS(app)
 
-    for model in models:
-        if model not in models_defaults:
-            response[model] = models_defaults["DEFAULT"]
+public_key = b""""
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlLX6VS+hjfsckusKCoMg
+3op6g5EAfHPohyBsAoSS1GcvpJZLKacKNEW5SHpvPs9WGFfmAeJwbK6HfIkvrbOX
+B/3MxxTBsD/c5HA2WTONPr797Q7O2m1pMzC7acqad2iBWM+50+56wDgxyHd20wOE
+g9kTW2IvscXQUHdAIqdqKVWsMfyfERDy12dN/vp7AICZjlyT38idib1bQgylKTl1
+APgZgVqnE0IM0ER6luNFzWMSjZ3CpJNx0UTiLW3H/DLFfvxfzOIqYLEm3ylGxGHB
+/Kndhq8/yjNG2YJPALGR8p11+MEgdt4osDZrdgUDDKxDimhq+WPN8leKxVg9TPF/
+rQIDAQAB
+-----END PUBLIC KEY-----"""
+
+@dataclass
+class ProviderDetails:
+    api_key: str
+    version_key: str
+
+@dataclass
+class InferenceRequest:
+    uuid: str
+    model_name: str
+    model_tag: str
+    model_provider: str
+    model_parameters: dict
+    prompt: str
+
+@dataclass
+class ProablityDistribution:
+    log_prob_sum: float
+    simple_prob_sum: float
+    tokens: dict
+
+@dataclass
+class InferenceResult:
+    uuid: str
+    model_name: str
+    model_tag: str
+    model_provider: str
+    token: str
+    probability: Union[float, None]
+    top_n_distribution: Union[ProablityDistribution, None]
+
+InferenceFunction = Callable[[str, InferenceRequest], None]
+
+class InferenceAnnouncer:
+    def __init__(self, sse_client):
+        self.sse_client = sse_client
+        self.cancel_cache = cachetools.TTLCache(maxsize=1000, ttl=60)
+
+    def __format_message__(self, event: str, infer_result: InferenceResult) -> str:
+        encoded = {
+            "message": infer_result.token,
+            "model_name": infer_result.model_name,
+            "model_tag": infer_result.model_tag,
+        }
+
+        if infer_result.probability is not None:
+            encoded["prob"] = round(math.exp(infer_result.probability) * 100, 2) 
+
+        if infer_result.top_n_distribution is not None:
+            encoded["top_n_distribution"] = {
+                "log_prob_sum": infer_result.top_n_distribution.log_prob_sum,
+                "simple_prob_sum": infer_result.top_n_distribution.simple_prob_sum,
+                "tokens": infer_result.top_n_distribution.tokens
+            }
+
+        return json.dumps({"data": encoded, "type": event})
+    
+    def announce(self, infer_result: InferenceResult, event: str):
+        if infer_result.uuid in self.cancel_cache:
+            return False
+
+        message = None
+        if event == "done":
+            message = json.dumps({"data": {}, "type": "done"})
         else:
-            response[model] = models_defaults[model]
+            message = self.__format_message__(event=event, infer_result=infer_result)
 
-    response = jsonify(response)
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    return response
+        self.sse_client.publish(infer_result.uuid, message)
+
+        return True
+
+    def cancel_callback(self, message):
+        if message['type'] == 'pmessage':
+            data = json.loads(message['data'])
+            uuid = data['uuid']
+            print("\t\tCancelling inference for uuid: {}".format(uuid))
+            self.cancel_cache[uuid] = True
+        
+   
+class InferenceManager:
+    def __init__(self, sse_client):
+        self.announcer = InferenceAnnouncer(sse_client)
+
+    def __error_handler__(self, inference_fn: InferenceFunction, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        infer_result = InferenceResult(
+            uuid=inference_request.uuid,
+            model_name=inference_request.model_name,
+            model_tag=inference_request.model_tag,
+            model_provider=inference_request.model_provider,
+            token=None,
+            probability=None,
+            top_n_distribution=None
+        )
+    
+        if not self.announcer.announce(InferenceResult(
+            uuid=inference_request.uuid,
+            model_name=inference_request.model_name,
+            model_tag=inference_request.model_tag,
+            model_provider=inference_request.model_provider,
+            token="[INITIALIZING]",
+            probability=None,
+            top_n_distribution=None
+        ), event="status"):
+            return
+
+        try:
+            inference_fn(provider_details, inference_request)
+        except openai.error.Timeout as e:
+            infer_result.token = f"[ERROR] OpenAI API request timed out: {e}"
+        except openai.error.APIError as e:
+            infer_result.token = f"[ERROR] OpenAI API returned an API Error: {e}"
+        except openai.error.APIConnectionError as e:
+            infer_result.token = f"[ERROR] OpenAI API request failed to connect: {e}"
+        except openai.error.InvalidRequestError as e:
+            infer_result.token = f"[ERROR] OpenAI API request was invalid: {e}"
+        except openai.error.AuthenticationError as e:
+            infer_result.token = f"[ERROR] OpenAI API request was not authorized: {e}"
+        except openai.error.PermissionError as e:
+            infer_result.token = f"[ERROR] OpenAI API request was not permitted: {e}"
+        except openai.error.RateLimitError as e:
+            infer_result.token = f"[ERROR] OpenAI API request exceeded rate limit: {e}"
+        except requests.exceptions.RequestException as e:
+            print("RequestException: {}".format(e))
+            if infer_result.model_provider == "huggingface":
+                infer_result.token = f"[ERROR] No response from huggingface.co after sixty seconds"
+            else:
+                infer_result.token = f"[ERROR] No response from {infer_result.model_provider } after sixty seconds"
+        except ValueError as e:
+            infer_result.token = f"[ERROR] Error parsing response from API: {e}"
+        except Exception as e:
+            infer_result.token = f"[ERROR] {e}"
+        finally:
+            if infer_result.token is None:
+                infer_result.token = "[COMPLETED]"
+            self.announcer.announce(infer_result, event="status")
+    
+    def __openai_chat_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        openai.api_key = provider_details.api_key
+
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        print("stop sequence", inference_request.model_parameters['stop_sequences'])
+        response = openai.ChatCompletion.create(
+             model=inference_request.model_name,
+             messages = [
+                {"role": "system", "content": "You are ChatGPT, a large language model trained by OpenAI. Answer as concisely as possible. Knowledge cutoff: 2021-09-01 Current date: {current_date}"},
+                {"role": "user", "content": inference_request.prompt},
+            ],
+            temperature=inference_request.model_parameters['temperature'],
+            max_tokens=inference_request.model_parameters['maximum_length'],
+            top_p=inference_request.model_parameters['top_p'],
+            #stop=inference_request.model_parameters['stop_sequences'],
+            frequency_penalty=inference_request.model_parameters['frequency_penalty'],
+            presence_penalty=inference_request.model_parameters['presence_penalty'],
+            stream=True
+        )
+
+        total_tokens = 0
+        tokens = ""
+        cancelled = False
+
+        for event in response:
+            response = event['choices'][0]
+            if response['finish_reason'] == "stop":
+                break
+
+            delta = response['delta']
+
+            if not "content" in delta:
+                continue
+            generated_token = delta["content"]
+            tokens += generated_token
+
+            infer_response = InferenceResult(
+                uuid=inference_request.uuid,
+                model_name=inference_request.model_name,
+                model_tag=inference_request.model_tag,
+                model_provider=inference_request.model_provider,
+                token=generated_token,
+                probability=None,
+                top_n_distribution=None
+             )
+
+            if cancelled: continue
+
+            if not self.announcer.announce(infer_response, event="infer"):
+                print("Cancelled inference")
+                cancelled = True
+            
+
+        #print("Final tokens", tokens)
+
+    def __openai_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        openai.api_key = provider_details.api_key
+
+        response = openai.Completion.create(
+            model=inference_request.model_name,
+            prompt=inference_request.prompt,
+            temperature=inference_request.model_parameters['temperature'],
+            max_tokens=inference_request.model_parameters['maximum_length'],
+            top_p=inference_request.model_parameters['top_p'],
+            stop=None if len(inference_request.model_parameters['stop_sequences']) == 0 else inference_request.model_parameters['stop_sequences'],
+            frequency_penalty=inference_request.model_parameters['frequency_penalty'],
+            presence_penalty=inference_request.model_parameters['presence_penalty'],
+            logprobs=5,
+            stream=True
+        )
+        total_tokens = 0
+        tokens = ""
+        cancelled = False
+
+        for event in response:
+            generated_token = event['choices'][0]['text']
+            infer_response = None
+            try:
+                chosen_log_prob = 0
+                likelihood = event['choices'][0]["logprobs"]['top_logprobs'][0]
+
+                prob_dist = ProablityDistribution(
+                    log_prob_sum=0, simple_prob_sum=0, tokens={},
+                )
+
+                total_tokens += 1
+
+                for token, log_prob in likelihood.items():
+                    simple_prob = round(math.exp(log_prob) * 100, 2)
+                    prob_dist.tokens[token] = [log_prob, simple_prob]
+
+                    if token == generated_token:
+                        chosen_log_prob = round(log_prob, 2)
+  
+                    prob_dist.simple_prob_sum += simple_prob
+                
+                
+                prob_dist.tokens = dict(
+                    sorted(prob_dist.tokens.items(), key=lambda item: item[1][0], reverse=True)
+                )
+                prob_dist.log_prob_sum = chosen_log_prob
+                prob_dist.simple_prob_sum = round(prob_dist.simple_prob_sum, 2)
+             
+                #print("prob_dist", prob_dist)
+                tokens += generated_token
+                infer_response = InferenceResult(
+                    uuid=inference_request.uuid,
+                    model_name=inference_request.model_name,
+                    model_tag=inference_request.model_tag,
+                    model_provider=inference_request.model_provider,
+                    token=generated_token,
+                    probability=event['choices'][0]['logprobs']['token_logprobs'][0],
+                    top_n_distribution=prob_dist
+                )
+            except IndexError:
+                #print("IndexError", event)
+                infer_response = InferenceResult(
+                    uuid=inference_request.uuid,
+                    model_name=inference_request.model_name,
+                    model_tag=inference_request.model_tag,
+                    model_provider=inference_request.model_provider,
+                    token=generated_token,
+                    probability=-1,
+                    top_n_distribution=None
+                )
+
+            if cancelled: continue
+
+            if not self.announcer.announce(infer_response, event="infer"):
+                print("Cancelled inference")
+                cancelled = True
+        
+        #print("Final tokens", tokens)
+
+    def openai_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        if inference_request.model_name == "gpt-3.5-turbo":
+            self.__error_handler__(self.__openai_chat_generation__, provider_details, inference_request)
+        else:
+            self.__error_handler__(self.__openai_text_generation__, provider_details, inference_request)
+
+    def __cohere_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        with requests.post("https://api.cohere.ai/generate",
+            headers={
+                "Authorization": f"Bearer {provider_details.api_key}",
+                "Content-Type": "application/json",
+                "Cohere-Version": "2021-11-08",
+            },
+            data=json.dumps({
+                "prompt": inference_request.prompt,
+                "model": inference_request.model_name,
+                "temperature": float(inference_request.model_parameters['temperature']),
+                "p": float(inference_request.model_parameters['top_p']),
+                "k": int(inference_request.model_parameters['top_k']),
+                "stop_sequences": inference_request.model_parameters['stop_sequences'],
+                "frequency_penalty": float(inference_request.model_parameters['frequency_penalty']),
+                "presence_penalty": float(inference_request.model_parameters['presence_penalty']),
+                "return_likelihoods": "GENERATION",
+                "max_tokens": int(inference_request.model_parameters['maximum_length']),
+                "stream": True,
+            }),
+            stream=True
+        ) as response:
+            if response.status_code != 200:
+                raise Exception(f"Request failed: {response.status_code} {response.reason}")
+
+            #print("Cohere Response", response.status_code, response.reason)
+
+            total_tokens = 0
+            #print("Cohere Response", response.status_code, response.reason)
+            cancelled = False
+
+            for token in response.iter_lines():
+                #print("1")
+                #print("token", token)
+                token = token.decode('utf-8')
+                token_json = json.loads(token)
+                print("TOKEN JSON", token_json)
+                #print("token_json", token_json)
+                total_tokens += 1
+                if cancelled: continue
+
+                if not self.announcer.announce(InferenceResult(
+                    uuid=inference_request.uuid,
+                    model_name=inference_request.model_name,
+                    model_tag=inference_request.model_tag,
+                    model_provider=inference_request.model_provider,
+                    token=token_json['text'],
+                    probability=None, #token_json['likelihood']
+                    top_n_distribution=None
+                ), event="infer"):
+                    print("Cancelled inference")
+                    cancelled = True
+
+    def cohere_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        self.__error_handler__(self.__cohere_text_generation__, provider_details, inference_request)
+    
+    def __huggingface_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        print("[Loading HF Model]")
+        response = requests.request("POST",
+            f"https://api-inference.huggingface.co/models/{inference_request.model_name}",
+            headers={"Authorization": f"Bearer {provider_details.api_key}"},
+            json={
+                "inputs": inference_request.prompt,
+                "stream": True,
+                "parameters": {
+                    "max_length": min(inference_request.model_parameters['maximum_length'], 250), # max out at 250 tokens per request, we should handle for this in client side but just in case
+                    "temperature": inference_request.model_parameters['temperature'],
+                    "top_k": inference_request.model_parameters['top_k'],
+                    "top_p": inference_request.model_parameters['top_p'],
+                    "repetition_penalty": inference_request.model_parameters['repetition_penalty'],
+                    "stop_sequences": inference_request.model_parameters['stop_sequences'],
+                },
+                "options": {
+                    "use_cache": False
+                }
+            },
+            timeout=60
+        )
+
+        #print response content-type
+        content_type = response.headers["content-type"]
+        print("content_type", content_type)
+        #check if 200
+        total_tokens = 0
+        cancelled = False
+
+        if response.status_code != 200:
+            raise Exception(f"Request failed: {response.status_code} {response.reason}")
+
+        if content_type == "application/json":
+            #print("response", response.status_code, response.reason)
+            return_data = json.loads(response.content.decode("utf-8"))
+            outputs = return_data[0]["generated_text"]
+            outputs = outputs.removeprefix(inference_request.prompt)
+            print("[Got HF Model output]")
+
+            #for word in [outputs[i:i+4] for i in range(0, len(outputs), 4)]:
+            self.announcer.announce(InferenceResult(
+                uuid=inference_request.uuid,
+                model_name=inference_request.model_name,
+                model_tag=inference_request.model_tag,
+                model_provider=inference_request.model_provider,
+                token=outputs,
+                probability=None,
+                top_n_distribution=None
+            ), event="infer")
+        else:
+            previous_token_chars = None
+            previous_token = None
+
+            for response in response.iter_lines():
+                response = response.decode('utf-8')
+                if response == "":
+                    continue
+
+                response_json = json.loads(response[5:])
+                if "error" in response:
+                    error = response_json["error"]
+                    raise Exception(f"{error}")
+
+                token = response_json['token']
+                
+                total_tokens += 1
+                
+                if token["special"]:
+                    continue
+                
+                if inference_request.model_name.startswith("google/flan-") and token['id'] != 3:
+
+                    current_char = google_tokenizer.decode(token['id'])
+                
+                    if previous_token_chars is None:
+                        previous_token_chars = current_char
+                        previous_token = token['id']
+                    else:
+                        buffer_chars = google_tokenizer.decode([previous_token, token['id']])
+
+                        if previous_token_chars != "\n":
+                            previous_token_chars = previous_token_chars.lstrip()
+
+                        previous_token_chars = buffer_chars.removeprefix(previous_token_chars)
+                        previous_token = token['id']
+                        response_json['token']['text'] = previous_token_chars
+
+                if cancelled: continue
+
+                if not self.announcer.announce(InferenceResult(
+                    uuid=inference_request.uuid,
+                    model_name=inference_request.model_name,
+                    model_tag=inference_request.model_tag,
+                    model_provider=inference_request.model_provider,
+                    token= " " if token['id'] == 3 else response_json['token']['text'],
+                    probability=response_json['token']['logprob'],
+                    top_n_distribution=None
+                ), event="infer"):
+                    print("Cancelled inference")
+                    cancelled = True
+                    
+        print("[Finished HF Model output]")
+           
+    def huggingface_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        self.__error_handler__(self.__huggingface_text_generation__, provider_details, inference_request)
+
+    def __forefront_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        print("Forefront", inference_request.model_parameters, inference_request.model_name, provider_details.version_key)
+
+        print(f'URL: {f"https://shared-api.forefront.link/organization/gPn2ZLSO3mTh/{inference_request.model_name}/completions/{provider_details.version_key}"}')
+        with requests.post(
+            f"https://shared-api.forefront.link/organization/gPn2ZLSO3mTh/{inference_request.model_name}/completions/{provider_details.version_key}",
+            headers={
+                "Authorization": f"Bearer {provider_details.api_key}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps({
+                "text": inference_request.prompt,
+                "top_p": float(inference_request.model_parameters['top_p']),
+                "top_k": int(inference_request.model_parameters['top_k']),
+                "temperature":  float(inference_request.model_parameters['temperature']),
+                "repetition_penalty":  float(inference_request.model_parameters['repetition_penalty']),
+                "length": int(inference_request.model_parameters['maximum_length']),
+                "stop": inference_request.model_parameters['stop_sequences'],
+                "logprobs": 5,
+                "stream": True,
+            }),
+            stream=True
+        ) as response:
+            print("response.status_code", response.status_code)
+            if response.status_code != 200:
+                raise Exception(f"Request failed: {response.status_code} {response.reason}")
+            cancelled = False
+            total_tokens = 0
+            aggregate_string_length = 0
+            full_completion = ""
+
+            for packet in sseclient.SSEClient(response).events():
+                generated_token = None
+                probability = None
+                prob_dist = None
+
+                if packet.event == "update":
+                    full_completion = packet.data
+                    packet.data = urllib.parse.unquote(packet.data)
+                    generated_token = packet.data[aggregate_string_length:]
+                    aggregate_string_length = len(packet.data)
+
+                    if not self.announcer.announce(InferenceResult(
+                        uuid=inference_request.uuid,
+                        model_name=inference_request.model_name,
+                        model_tag=inference_request.model_tag,
+                        model_provider=inference_request.model_provider,
+                        token=generated_token,
+                        probability=probability,
+                        top_n_distribution=prob_dist
+                    ), event="infer"):
+                        print("Cancelled inference")
+                        cancelled = True
+                elif packet.event == "message":
+                    #print("message", packet.data)
+                    data = json.loads(packet.data)
+
+                    logprobs = data["logprobs"][0]
+                    tokens = logprobs["tokens"]
+                    token_logprobs = logprobs["token_logprobs"]
+
+                    #print(f"Tokens: {len(tokens)}, Total: {total_tokens} ")
+                    new_tokens = tokens[total_tokens:]
+
+                    #print("Old Tokens", tokens[:total_tokens])
+                    #print("New Tokens", tokens[total_tokens:])
+                    for index, new_token in enumerate(new_tokens):
+                        generated_token = new_token
+            
+                        probability = token_logprobs[total_tokens + index]
+                        top_logprobs = logprobs["top_logprobs"][total_tokens + index]
+                            
+                        chosen_log_prob = 0
+                        prob_dist = ProablityDistribution(
+                            log_prob_sum=0, simple_prob_sum=0, tokens={},
+                        )
+
+                        for token, log_prob in top_logprobs.items():
+                            if log_prob == -3000.0: continue
+                            simple_prob = round(math.exp(log_prob) * 100, 2)
+                            prob_dist.tokens[token] = [log_prob, simple_prob]
+
+                            if token == new_token:
+                                chosen_log_prob = round(log_prob, 2)
+            
+                            prob_dist.simple_prob_sum += simple_prob
+                            
+                        prob_dist.tokens = dict(
+                            sorted(prob_dist.tokens.items(), key=lambda item: item[1][0], reverse=True)
+                        )
+                        prob_dist.log_prob_sum = chosen_log_prob
+                        prob_dist.simple_prob_sum = round(prob_dist.simple_prob_sum, 2)
+
+                        if not self.announcer.announce(InferenceResult(
+                            uuid=inference_request.uuid,
+                            model_name=inference_request.model_name,
+                            model_tag=inference_request.model_tag,
+                            model_provider=inference_request.model_provider,
+                            token=generated_token,
+                            probability=probability,
+                            top_n_distribution=prob_dist
+                        ), event="infer"):
+                            print("Cancelled inference")
+                            cancelled = True
+
+                    total_tokens = len(tokens)
+                elif packet.event == "end":
+                    break
+                else:
+                    continue
+
+                if cancelled: continue
+
+    def forefront_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        self.__error_handler__(self.__forefront_text_generation__, provider_details, inference_request)
+
+    def __hosted_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        #wait for announcement from "llama:inference:response"
+        pubsub = GlobalState.sse_client
+        pubsub.sse_subscribe(f"alpaca:inference:complete:{inference_request.uuid}")
+
+        for message in pubsub.sse_listen():
+            if message["type"] == "message":
+                print("Inference complete!!!")
+                pubsub.unsubscribe(f"alpaca:inference:complete:{inference_request.uuid}")
+                pubsub = None
+                break
+
+    def hosted_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+       self.__error_handler__(self.__hosted_text_generation__, provider_details, inference_request)
+    
+    def get_announcer(self):
+        return self.announcer 
+
+class ModelManager:
+    def __init__(self, sse_client):
+        self.sse_client = sse_client
+        self.local_cache = {}
+        self.inference_manager = InferenceManager(sse_client)
+        self.models_json = json.load(open('models.json',))
+
+    def get_available_models(self):
+        # model provider --> model map
+        provider_model_map = {}
+        for providers in self.models_json:
+            if "models" in self.models_json[providers]:
+                provider_model_map[providers] = self.models_json[providers]['models'].keys()
+            else:
+                provider_model_map[providers] = []
+        return provider_model_map
+    
+    def get_all_models_with_parameters(self):
+        provider_model_map = self.get_available_models()
+        model_parameters = {}
+        for provider in provider_model_map:
+            for model in provider_model_map[provider]:
+                model_parameters[model] = self.get_model_with_parameters(model)
+                model_parameters[model]["parameters"] = json.loads(model_parameters[model]["parameters"])
+        return model_parameters
+
+    def get_model_with_parameters(self, provider: str, model_name: str):
+        return self.models_json[provider]['models'][model_name]
+    
+    def get_model_attribute(self, model_name: str, attribute: str):
+        return {}
+        #return self.redis_client.hget(f"model:{model_name}", attribute)
+
+    def get_provider_key(self, provider: str):
+        # TODO: abstract to just one function its duplicated
+        provider_key = ""
+        provider_value = ""
+        if (provider == "openai"):
+            provider_key = "OPENAI_API_KEY"
+        elif (provider == "cohere"):
+            provider_key = "COHERE_API_KEY"
+        elif (provider == "huggingface"):
+            provider_key = "HF_API_KEY"
+        elif (provider == "forefront"):
+            provider_key = "FOREFRONT_API_KEY"
+        else:
+            provider_key = "UNKNOWN_API_KEY"
+        if os.environ.get(provider_key) is None:
+            # return empty is key not found
+            provider_value = ""
+        else:
+            # return key if found
+            provider_value = os.getenv(provider_key)
+        return provider_value
+    
+    def text_generation(self, inference_request: InferenceRequest):
+        provider_details = ProviderDetails(
+            api_key=self.get_provider_key(inference_request.model_provider),
+            version_key=None
+        )
+        if inference_request.model_provider == "openai":
+            return self.inference_manager.openai_text_generation(provider_details, inference_request)
+        elif inference_request.model_provider == "cohere":
+            return self.inference_manager.cohere_text_generation(provider_details, inference_request)
+        elif inference_request.model_provider == "huggingface":
+            return self.inference_manager.huggingface_text_generation(provider_details, inference_request)
+        elif inference_request.model_provider == "forefront":
+            provider_details.version_key = self.get_model_attribute(f"forefront:{inference_request.model_name}", "version")
+            inference_request.model_name = self.get_model_attribute(f"forefront:{inference_request.model_name}", "name")
+            return self.inference_manager.forefront_text_generation(provider_details, inference_request)
+        elif inference_request.model_provider == "textgeneration":
+            return self.inference_manager.hosted_text_generation(provider_details, inference_request)
+    
+    def get_announcer(self):
+        return self.inference_manager.get_announcer()
+
+class GlobalState:
+    model_manager = ModelManager(SSE_MANAGER)
+    sse_client = SSE_MANAGER
+
+def bulk_completions(tasks: List[InferenceRequest]): #lock
+    time.sleep(1) # enough time for the SSE to establish connection, we don't want to drop any tokens
+
+    completion_greenlets = [gevent.spawn(GlobalState.model_manager.text_generation, inference_request) for inference_request in tasks]
+    gevent.joinall(completion_greenlets)
+
+    GlobalState.model_manager.get_announcer().announce(InferenceResult(
+        uuid=tasks[0].uuid,
+        model_name=None,
+        model_tag=None,
+        model_provider=None,
+        token=None,
+        probability=None,
+        top_n_distribution=None
+    ), event="done")
+
+    #print("All done, releasing lock?")
+    #lock.release()
 
 if __name__ == '__main__':
+    # start sse before the server
+    SSE_MANAGER = sse_server.SSEManager(address=("127.0.0.1", 2437), authkey=b'sse')
+    SSE_MANAGER.connect()
     app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)

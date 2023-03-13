@@ -1,3 +1,5 @@
+const VERSION = "0.0.36"
+
 import React, {
   useCallback,
   useContext,
@@ -21,15 +23,17 @@ import {
   getDefaultKeyBinding,
 } from "draft-js"
 import { Button } from "../components/ui/button"
+import { Popover } from 'react-tiny-popover'
 import NavBar from "../components/navbar"
+import {SSE} from "sse.js"
 import {
   Loader2,
   BarChart2,
   Copy,
   Settings2,
-  XCircle,
   AlertTriangle,
   Trash2,
+  Filter
 } from "lucide-react"
 import {
   Tooltip,
@@ -45,6 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog"
+import chroma from "chroma-js"
 import { useMetaKeyPress } from "../lib/metakeypress"
 import { useKeyPress } from "../lib/keypress"
 import "draft-js/dist/Draft.css"
@@ -57,6 +62,8 @@ import { TooltipProvider } from "@radix-ui/react-tooltip"
 import { useBreakpoint } from "../hooks/useBreakpoint"
 import { uuid } from 'uuidv4';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
+import { InputArea } from "../components/inputarea"
+
 // CONSTANTS
 const ENDPOINT_URL = process.env.NODE_ENV === "production" || !process.env.ENDPOINT_URL ? "" : process.env.ENDPOINT_URL
 
@@ -93,19 +100,34 @@ const styles = {
     backgroundColor: "#D7BCE8",
     padding: "2px 0",
   },
+  forefront: {
+    backgroundColor: "#BCCAE8",
+    padding: "2px 0",
+  },
+  anthropic: {
+    backgroundColor: "#cc785c80",
+    padding: "2px 0",
+  },
+  aleph_alpha: {
+    backgroundColor: "#e3ff00",
+    padding: "2px 0",
+  },
+  question_mark: {
+    backgroundColor: "#d32fce80",
+    padding: "2px 0",
+  },
   default: {
+    backgroundColor: "transparent",
     transition: 'background-color 0.2s ease-in-out',
     padding: "2px 0"
   },
 }
 
 // model specific text highlighting
-function getDecoratedStyle(model_name: string, showHighlights: boolean) {
-  console.log("showHighlights", showHighlights)
+function getDecoratedStyle(provider: string, showHighlights: boolean) {
   if (showHighlights === false) return styles.default
 
-  const prefix = model_name.split(":")[0]
-  switch (prefix) {
+  switch (provider) {
     case "openai":
       return styles.openai
     case "textgeneration":
@@ -114,6 +136,15 @@ function getDecoratedStyle(model_name: string, showHighlights: boolean) {
       return styles.cohere
     case "huggingface":
       return styles.huggingface
+    case "forefront":
+      return styles.forefront
+    case "anthropic":
+      return styles.anthropic
+    case "aleph-alpha":
+      return styles.aleph_alpha
+    case "???":
+      return styles.question_mark
+
     default:
       return styles.default
   }
@@ -123,20 +154,23 @@ const normalize_parameter = (parameter: number) => {
   else return parameter.toFixed(1)
 }
 
-const ModelCard = forwardRef((props, ref) => {
-  const {model, handleSelectModel, showHighlights, showProbabilities} = props
+const ModelCardStats = (props: any) => {
+  const {errorMessage, is_running, totalCharacters} = props
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  const intervalRef = useRef(null);
+  const [time, setTime] = useState(0);
+  
+  useEffect(() => {
+    if (is_running && isTimerRunning === false) {
+      startTimer()
+    } else if (!is_running && isTimerRunning === true) {
+      stopTimer()
+    }
+  }, [is_running])
 
-  console.warn("showProbabilities", showProbabilities)
-  const [time, setTime] = useState(0)
-  const [_, setIsRunning] = useState(false)
-  const intervalRef = useRef(null)
-  const [totalCharacters, setTotalCharacters] = useState(0)
-  const [errorMessage, setErrorMessage] = useState(null);
-  const showProbabilitiesRef = useRef(showProbabilities)
-  const showHighlightsRef = useRef(showHighlights)
 
   const startTimer = () => {
-    setIsRunning(true)
+    setIsTimerRunning(true)
     setTime(0)
     intervalRef.current = setInterval(() => {
       setTime((prevTime) => prevTime + 1)
@@ -145,8 +179,34 @@ const ModelCard = forwardRef((props, ref) => {
 
   const stopTimer = () => {
     clearInterval(intervalRef.current)
-    setIsRunning(false)
+    setIsTimerRunning(false)
   }
+
+  function insertLineBreaks(str) {
+    if (str === undefined || str === null) return [];
+
+    const words = str.split(" ");
+    const result = [];
+    let accumulator = "";
+
+    for (let i = 0; i < words.length; i++) {
+      //console.log("words[i]", words[i], accumulator)
+      accumulator += `${words[i]} `;
+      
+      if ((i + 1) % 4 === 0 || i === words.length - 1) {
+        result.push(accumulator);
+        accumulator = "";
+      }
+    }
+    return result;
+  }
+
+  const paragraphs = insertLineBreaks(errorMessage).map((words, index) => (
+    <span style = {{display: 'block', textAlign: 'center'}} key={index}>{words}</span>
+  ));
+
+  const token_per_second =
+    totalCharacters > 0 ? Math.floor(totalCharacters / Math.max(time, 1)) : 0
 
   const formatTime = (time) => {
     const minutes = Math.floor(time / 60)
@@ -156,49 +216,141 @@ const ModelCard = forwardRef((props, ref) => {
     return `${minutes}:${seconds}`
   }
 
+  return (
+    <div className="flex font-medium">
+      <span>{formatTime(time)}</span>
+      <span className="flex-1"></span>
+      <span>
+        <Tooltip delayDuration={300} skipDelayDuration={150} open={errorMessage ? true : false}>
+          <TooltipTrigger asChild>
+            <div style = {{display: (errorMessage ) ? 'block' : 'none'}}>
+              <AlertTriangle color = "#f56760"/>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side={"top"}>
+            <>{paragraphs}</>
+          </TooltipContent>
+        </Tooltip>
+            
+        {token_per_second === 0 || errorMessage ? "" : `${token_per_second} chars/s`}{" "}
+      </span>
+      <span className="flex-1"></span>
+      <span>{totalCharacters} chars</span>
+    </div>
+  )
+}
+
+const ModelEditor = React.memo((props: any) => {
+  const {
+    model, showHighlights, showProbabilities,
+    editorState
+  } = props
+
+  return (
+    <Editor
+      readOnly={true}
+      customStyleMap={styleMap}
+      editorState={editorState}
+      onChange={() => {}}
+    />
+  )
+})
+
+const ModelCard = forwardRef((props, ref) => {
+  const _ref = useRef();
+  //const onScreen = useOnScreen(_ref);
+
+  const token_index = useRef(0)
+  const {model, handleSelectModel, showHighlights, showProbabilities, completion} = props
+  const [modelState, setModelState] = React.useState<string>("IDLE")
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [totalCharacters, setTotalCharacters] = useState(0);
+  const [output, setOutput] = React.useState<string[]>([])
+  const [status, setStatus] = React.useState<string[]>([])
+
+  //console.log("onScreen", onScreen, model.tag)
+  if (completion.length > token_index.current) {
+    //console.log(model.name, "completion", completion, token_index.current, completion.length)
+    let completion_slice = completion.slice(token_index.current, completion.length)
+    token_index.current = completion.length;
+    setOutput(completion_slice)
+  }
+
   const Decorated = (props: any) => {
     const children = props.children
     const entity = props.contentState.getEntity(props.entityKey)
     const entityData = entity.getData()
-    const style = getDecoratedStyle(entityData.model, showHighlightsRef.current)
+    const style = getDecoratedStyle(model.provider, showHighlightsRef.current)
+    const probabilitiesMap = entityData.top_n_prob // comes in as json string
+    const tokensMap = probabilitiesMap ? probabilitiesMap['tokens'] : []
+    const [popoverOpen, setPopoverOpen] = React.useState<boolean>(false)
     if (entityData.output === props.decoratedText) {
       let content = (
         <span style={style} data-offset-key={children[0].key} className="hover:!brightness-90">
           {children}
         </span>
       )
-      // if (entityData.model.startsWith("openai:")) {
-      //   content = (
-      //     <TooltipProvider>
-      //       <Tooltip delayDuration={300} skipDelayDuration={150}>
-      //         <TooltipTrigger asChild>{content}</TooltipTrigger>
-      //         <TooltipContent hidden={!showProbabilitiesRef.current } side="bottom">
-      //           <p>Probability = {entityData.prob}%</p>
-      //         </TooltipContent>
-      //       </Tooltip>
-      //     </TooltipProvider>
-      //   )
-      // }
+      // model.provider === "cohere"  ||
+      //console.log(`Model Provider: '${model.provider}' and Model Name: '${model.name}'`)
+
+      if (
+        (
+          (model.provider === "openai" && model.name !== "openai:gpt-3.5-turbo") ||
+          model.provider === "forefront"
+        ) && (
+          tokensMap[props.decoratedText] != undefined && tokensMap[props.decoratedText].length > 0
+        )
+        ) {
+        let percentage = Math.min(tokensMap[props.decoratedText][1] / probabilitiesMap['simple_prob_sum'], 1.0)
+        let f = chroma.scale(["#ff8886", "ffff00", "#96f29b"]) // red - yellow - green spectrum
+        let highlight_color = f(percentage)
+
+        let custom_style = showProbabilitiesRef.current ? {
+          backgroundColor: highlight_color,
+          padding: "2px 0",
+        } : getDecoratedStyle(model.provider, showHighlightsRef.current)
+
+        let popoverContent = 
+        (
+          <div className="shadow-xl shadow-inner rounded-sm bg-white mb-2" data-container="body">
+            <ul key={children[0].key} className="grid pt-4">
+              {
+                Object.entries(tokensMap).map((item, index) => {
+                  return (
+                    <li key={item + "-" + index + "-" + children[0].key} className={item[0] === entityData.output ? "bg-highlight-tokens w-full font-base text-white pl-4" : "pl-4 text-bg-slate-800"}>
+                      {item[0]} = {tokensMap[item[0]][1]}%
+                    </li>
+                  )
+                })
+              }
+            </ul>
+            <div className="m-4 pb-4">
+              <div className="text-base">Total: {probabilitiesMap['log_prob_sum']} logprob on 1 tokens</div>
+              <div className="text-xs">({probabilitiesMap['simple_prob_sum']}% probability covered in top {Object.keys(probabilitiesMap['tokens']).length} logits)</div>
+            </div>
+          </div>
+        )
+        content = (
+          <Popover 
+            isOpen={popoverOpen} 
+            onClickOutside={() => setPopoverOpen(false)}
+            positions={['bottom', 'top', 'left', 'right']}
+            content={popoverContent}
+            containerStyle={{zIndex: "1000"}}
+          >
+            <span style={custom_style} className={popoverOpen ? "font-bold" : ""} key={children[0].key} data-offset-key={children[0].key} onClick={() => {showProbabilitiesRef.current ? setPopoverOpen(!popoverOpen) : null}}>
+              {children}
+            </span>
+          </Popover>
+        )
+      }
 
       return content
     } else {
       return <span data-offset-key={children[0].key}>{children}</span>
     }
   }
-
-  // TEXT EDITOR ENTITY BASED STRATEGY
-  function findEntityRangesByType(entityType: any) {
-    return (contentBlock: any, callback: any, contentState: any) => {
-      contentBlock.findEntityRanges((character: any) => {
-        const entityKey = character.getEntity()
-        if (entityKey === null) {
-          return false
-        }
-        return contentState.getEntity(entityKey).getType() === entityType
-      }, callback)
-    }
-  }
-
+  
   const getEditorState = useCallback((): EditorState => {
     return editorStateRef.current
   }, [])
@@ -219,84 +371,105 @@ const ModelCard = forwardRef((props, ref) => {
     EditorState.createEmpty(createDecorator())
   )
   const editorStateRef = useRef<EditorState>(editorState)
-  const [output, setOutput] = React.useState<string[]>([])
-  const [modelState, setModelState] = React.useState<string>("IDLE")
-  
+
+  const showProbabilitiesRef = useRef(showProbabilities)
+  const showHighlightsRef = useRef(showHighlights)
   useEffect(() => {
     setEditorState(
       EditorState.forceSelection(editorState, editorState.getSelection())
     )
   }, [showProbabilities, showHighlights])
-
+  
   useEffect(() => {
     showProbabilitiesRef.current = showProbabilities
     showHighlightsRef.current = showHighlights
   })
 
+  // TEXT EDITOR ENTITY BASED STRATEGY
+  function findEntityRangesByType(entityType: any) {
+    return (contentBlock: any, callback: any, contentState: any) => {
+      contentBlock.findEntityRanges((character: any) => {
+        const entityKey = character.getEntity()
+        if (entityKey === null) {
+          return false
+        }
+        return contentState.getEntity(entityKey).getType() === entityType
+      }, callback)
+    }
+  }
+
   useEffect(() => {
-    if (output.message === "[INITIALIZING]") {
+    let current_editor_state = editorState;
+    let aggregate_new_chars = 0;
+    try {
+      for(const output_entry of output) {
+        //check if outpit is an array
+        aggregate_new_chars += output_entry.message.split("").length
+        const currentContent = current_editor_state.getCurrentContent()
+
+        // create new selection state where focus is at the end
+        const blockMap = currentContent.getBlockMap()
+        const key = blockMap.last().getKey()
+        const length = blockMap.last().getLength()
+        const selection = new SelectionState({
+          anchorKey: key,
+          anchorOffset: length,
+          focusKey: key,
+          focusOffset: length,
+        })
+        // Returns ContentState record updated to include the newly created DraftEntity record in it's EntityMap.
+        let newContentState = currentContent.createEntity(
+          "HIGHLIGHTED_WORD",
+          "MUTABLE",
+          { model: output_entry.model_name, output: output_entry.message, prob: output_entry.prob, top_n_prob: output_entry.top_n_distribution }
+        )
+        // Call getLastCreatedEntityKey to get the key of the newly created DraftEntity record.
+        const entityKey = currentContent.getLastCreatedEntityKey()
+        //insert text at the selection created above
+        const textWithInsert = Modifier.insertText(
+          currentContent,
+          selection,
+          output_entry.message,
+          null,
+          entityKey
+        )
+        const editorWithInsert = EditorState.push(
+          editorState,
+          textWithInsert,
+          "insert-characters"
+        )
+        current_editor_state = editorWithInsert
+      }
+    } catch (e) {
+    }
+    setTotalCharacters(totalCharacters + aggregate_new_chars)
+    setEditorState(current_editor_state)
+  }, [output])
+
+  useEffect(() => {
+    if (status.message === "[INITIALIZING]") {
       setModelState("INITIALIZED")
       setTotalCharacters(0)
-      startTimer()
       setErrorMessage(null)
       return
     }
-    if (output.message && output.message.indexOf("[ERROR] ") === 0) {
+    if (status.message && status.message.indexOf("[ERROR] ") === 0 && (modelState !== "COMPLETED" && modelState !== "IDLE")) {
       setModelState("ERROR")
-      stopTimer()
-      setErrorMessage(output.message.replace("[ERROR] ", ""))
+      setErrorMessage(status.message.replace("[ERROR] ", ""))
       return
     }
-    if (output.message === "[COMPLETED]") {
+    if (status.message === "[COMPLETED]") {
       setModelState("COMPLETED")
-      stopTimer()
       return
     }
-
-    if (modelState === "INITIALIZED") {
-      setModelState("RUNNING")
-    }
-    //check if outpit is an array
-    if (!Array.isArray(output)) setTotalCharacters(totalCharacters + output.message.split("").length)
-
-    const currentContent = editorState.getCurrentContent()
-
-    // create new selection state where focus is at the end
-    const blockMap = currentContent.getBlockMap()
-    const key = blockMap.last().getKey()
-    const length = blockMap.last().getLength()
-    const selection = new SelectionState({
-      anchorKey: key,
-      anchorOffset: length,
-      focusKey: key,
-      focusOffset: length,
-    })
-    // Returns ContentState record updated to include the newly created DraftEntity record in it's EntityMap.
-    let newContentState = currentContent.createEntity(
-      "HIGHLIGHTED_WORD",
-      "MUTABLE",
-      { model: output.model_name, output: output.message } // prob: output.prob
-    )
-    // Call getLastCreatedEntityKey to get the key of the newly created DraftEntity record.
-    const entityKey = currentContent.getLastCreatedEntityKey()
-    //insert text at the selection created above
-    const textWithInsert = Modifier.insertText(
-      currentContent,
-      selection,
-      output.message,
-      null,
-      entityKey
-    )
-    const editorWithInsert = EditorState.push(
-      editorState,
-      textWithInsert,
-      "insert-characters"
-    )
-    setEditorState(editorWithInsert)
-  }, [output])
+  }, [status])
 
   const handleNotification = (output: any) => {
     setOutput(output)
+  }
+
+  const handleNotificationStatus = (status: any) => {
+    setStatus(status)
   }
 
   const handleUndo = (output: any) => {
@@ -311,6 +484,7 @@ const ModelCard = forwardRef((props, ref) => {
   useImperativeHandle(ref, () => ({
     handleNotification,
     handleUndo,
+    handleNotificationStatus
   }))
 
   let border_class = ""
@@ -325,34 +499,19 @@ const ModelCard = forwardRef((props, ref) => {
     border_class = "border_inference_error"
   }
 
-  function insertLineBreaks(str) {
-    if (str === undefined || str === null) return [];
-
-    const words = str.split(" ");
-    const result = [];
-    for (let i = 0; i < words.length; i++) {
-      result.push(`${words[i]} `);
-      if ((i + 1) % 4 === 0) {
-        result.push(<br />);
-      }
-    }
-    return result;
-  }
-
-  const paragraphs = insertLineBreaks(errorMessage).map((words, index) => (
-    <span key={index}>{words}</span>
-  ));
-
-  const token_per_second =
-    totalCharacters > 0 ? Math.floor(totalCharacters / Math.max(time, 1)) : 0
-
   return (
-    <div className={`flex flex-col items-center text-gray-600 text-lg font-bold h-96`}
+    <div ref ={_ref} className={`flex flex-col items-center text-gray-600 text-lg font-bold h-96`}
       style = {model.state.selected? {
+        transition: 'all 0.3s ease',
         backgroundColor: '#f5f5f5',
         borderRadius: 4,
-        padding: 2
-      } : {} }>
+        padding: 6
+      } : {
+        transition: 'all 0.3s ease',
+        backgroundColor: '#ffffff',
+        borderRadius: 0,
+        padding: 0
+      } }>
       <div className="flex justify  max-w-[100%]">
         <h2
           onClick={(event) => { handleSelectModel(model, event.ctrlKey) }}
@@ -362,47 +521,29 @@ const ModelCard = forwardRef((props, ref) => {
             {model.name}
         </h2>
       </div>
-      <div className="relative editor-container h-full w-full text-base flex mt-2">
+      <div className="relative editor-container h-full w-full text-base flex mt-2" style = {{clipPath: 'inset(-1px)'}}>
         <div
           className={`font-medium relative p-3 overflow-hidden flex-1 flex flex-col loading_border ${border_class}`}
         >
-        <Editor
-          readOnly={true}
-          customStyleMap={styleMap}
-          editorState={editorState}
-          onChange={() => {}}
-        />
-        <div className="flex font-medium">
-          <span>{formatTime(time)}</span>
-          <span className="flex-1"></span>
-          <span>
-            <Tooltip delayDuration={300} skipDelayDuration={150}>
-              <TooltipTrigger asChild>
-                <div style = {{display: (errorMessage ) ? 'block' : 'none'}}>
-                  <AlertTriangle color = "#f56760"/>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side={"top"}>
-                <>{paragraphs}</>
-              </TooltipContent>
-            </Tooltip>
-            
-            {token_per_second === 0 || errorMessage ? "" : `${token_per_second} chars/s`}{" "}
-          </span>
-          <span className="flex-1"></span>
-          <span>{totalCharacters} chars</span>
-        </div>
-      </div>
+          <ModelEditor {...props} editorState ={editorState} />
+          <ModelCardStats
+            errorMessage={errorMessage}
+            totalCharacters={totalCharacters}
+            is_running = {modelState !== "ERROR" && modelState !== "COMPLETED" && modelState !== "IDLE"}
+          />
+       </div>
       </div>
     </div>
   )
 })
 
 export default function Compare() {
+  const [modelSearchValue, setModelSearchValue] = React.useState<string>("");
+  const is_mac_os = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const sseRef = useRef<any>(null);
   // PROBABLY USEUSE EFFECT TO CREATE A "HISTORY"
   // NEED TO ADD STOP SEQUENCES
   const [model, setModel] = React.useState<string>("")
-  const { availableModels, setAvailableModels } = useContext(ModelContext)
   // MODEL PARAMETERS
   const [openParameterSheet, setSaveOpenParameterSheet] =
     React.useState<boolean>(false)
@@ -420,7 +561,9 @@ export default function Compare() {
     React.useState<boolean>(false)
   const showProbabilitiesRef = useRef(showProbabilities)
 
-  const [modelsWithParameters, setModelWithParameters] = React.useState<any>([])
+  const [modelsCompletionState, setModelsCompletionState] = React.useState({});
+
+  const [modelsWithParameters, setModelsWithParameters] = React.useState<any>([])
   const modelEditorRefs = useRef({})
 
   // TEXT AREA CONTROL
@@ -430,85 +573,18 @@ export default function Compare() {
   const scrollRef = useRef(null) // create a ref to the scroll parent element
   // LOADING STATE
   const [generating, setGenerating] = React.useState<boolean>(false)
-  const [modelLoading, setModelLoading] = React.useState<boolean>(false)
+  const generatingRef =  useRef(generating);
   // ABORT CONTROLLER FOR FETCH
-  const abortController = useRef(null)
-  // DIALOG CONTROL
-  const { apiKeyAvailable, setApiKeyAvailable } = useContext(APIContext)
-  const [openDialog, setOpenDialog] = React.useState<boolean>(false)
+  const abortController = useRef(null);
   const [highlightModels, setHighlightModels] = React.useState<boolean>(true);
   const { isLg } = useBreakpoint("lg")
 
   const [allSelected, setAllSelected] = React.useState<boolean>(true);
-
   const [showAllParameters, setShowAllParameters] =
-    React.useState<boolean>(false)
-
-  // TEXT EDITOR FUNCTIONS
-  // TEXT EDITOR DECORATOR HELPER
-  const Decorated = (props: any) => {
-    const children = props.children
-    const contentState = props.contentState
-    const entity = props.contentState.getEntity(props.entityKey)
-    const entityData = entity.getData()
-    const style = getDecoratedStyle(entityData.model)
-    if (entityData.output === props.decoratedText) {
-      let content = (
-        <span style={style} data-offset-key={children[0].key}>
-          {children}
-        </span>
-      )
-
-      // if (entityData.model.startsWith("openai:")) {
-      //   content = (
-      //     <TooltipProvider>
-      //       <Tooltip>
-      //         <TooltipTrigger asChild>{content}</TooltipTrigger>
-      //         <TooltipContent
-      //           hidden={!showProbabilitiesRef.current}
-      //           side="bottom"
-      //         >
-      //           <p>Probability = {entityData.prob}%</p>
-      //         </TooltipContent>
-      //       </Tooltip>
-      //     </TooltipProvider>
-      //   )
-      // }
-
-      return content
-    } else {
-      return <span data-offset-key={children[0].key}>{children}</span>
-    }
-  }
-
-  // TEXT EDITOR ENTITY BASED STRATEGY
-  function findEntityRangesByType(entityType: any) {
-    return (contentBlock: any, callback: any, contentState: any) => {
-      contentBlock.findEntityRanges((character: any) => {
-        const entityKey = character.getEntity()
-        if (entityKey === null) {
-          return false
-        }
-        return contentState.getEntity(entityKey).getType() === entityType
-      }, callback)
-    }
-  }
-
-  const getEditorState = useCallback((): EditorState => {
-    return editorStateRef.current
-  }, [])
-
-  const createDecorator = () => {
-    return new CompositeDecorator([
-      {
-        strategy: findEntityRangesByType("HIGHLIGHTED_WORD"),
-        component: Decorated,
-        props: {
-          getEditorState,
-        },
-      },
-    ])
-  }
+    React.useState<boolean>(false);
+  const [openDialog, setOpenDialog] = React.useState<boolean>(false)
+  const [dialogTitle, setDialogTitle] = React.useState<string>("")
+  const [dialogMessage, setDialogMessage] = React.useState<string>("")
 
   // EDITOR STATE
   const createEditor = () => {
@@ -528,89 +604,40 @@ export default function Compare() {
 
   const [editorState, setEditorState] = React.useState(
     EditorState.moveFocusToEnd(EditorState.createWithContent(
-      createEditor(),
-      createDecorator()
+      createEditor()
     ))
   )
-
-  const editorStateRef = useRef<EditorState>(editorState)
-
   // PRESET LOADING and MODEL LOADING ON PAGE LOAD
   useEffect(() => {
-    // Get models to load in to dropdown
-    let model_keys = Object.keys(localStorage)
-      .filter((key_name) => {
-        if (key_name.startsWith("model_")) {
-          return true
-        }
-        return false
-      })
-      .map(function (item, i) {
-        return item.replace("model_", "")
-      })
-
-    var model_dict = {}
-    model_keys.map((modelName) => {
-      let model_value = JSON.parse(
-        localStorage.getItem("model_" + modelName) || "{}"
-      )
-      let modelProvider = model_value.model_provider
-      if (modelProvider === "HuggingFace Local") {
-        modelProvider = "textgeneration"
-      } else if (modelProvider === "HuggingFace Hosted") {
-        modelProvider = "huggingface"
-      } else if (modelProvider === "co:here") {
-        modelProvider = "cohere"
-      } else if (modelProvider === "OpenAI") {
-        modelProvider = "openai"
-      }
-      // check to make sure its downloaded and not already in available models state
-      let model_key = `${modelProvider}:${modelName}`
-      if (
-        availableModels[model_key] === undefined &&
-        model_value.available === true
-      ) {
-        // add to dict on two conditions
-        // not already there (set from downloaded state from before and prevent re-adding)
-        // and is available for inference
-        model_dict[model_key] = modelName
-      }
-    })
-    // dictionary in form of, example: textgeneration:t5-base --> t5-base
-    console.log("model_dict on load", model_dict)
-    setAvailableModels((availableModels: any) => ({
-      ...availableModels,
-      ...model_dict,
-    }))
-
     const fetchDefaultParameters = async () => {
-      console.log("fetching default parameters", model_dict)
       const response = await fetch(
-        ENDPOINT_URL.concat("/api/models_defaults"),
+        ENDPOINT_URL.concat("/api/all_models"),
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            models: Object.keys({
-              ...availableModels,
-              ...model_dict,
-            }),
-          }),
+          method: "GET",
+          headers: { 
+          } 
         }
       )
-
-      const json_params = await response.json()
+      
+      const json_params = await response.json();
       const models = [];
+      const default_enabled_models = [
+        'google/flan-ul2',
+        'llama-65b',
+        'command-xlarge-nightly',
+        'gpt-3.5-turbo',
+        'claude'
+      ];
 
       Object.keys(json_params).forEach(function (key) {
+        //curent_model_metalog(json_params[key].name, default_enabled_models.indexOf(json_params[key].name) !== -1)
         const model = {
           name: key,
           tag: key,
-          parameters: json_params[key],
+          parameters: json_params[key].parameters,
+          provider: json_params[key].provider,
           state: {
-            enabled: true,
+            enabled: default_enabled_models.indexOf(json_params[key].name) !== -1,
             selected: false,
           }
         }
@@ -618,8 +645,16 @@ export default function Compare() {
         models.push(model)
       })
 
-      console.warn("[][][][][]")
       let settings = JSON.parse(localStorage.getItem("openplayground_compare_settings") || "{}")
+
+      if (settings && !settings.version || settings.version !== VERSION) {
+        console.warn("Wiping local storage settings")
+        settings = {}
+        localStorage.setItem("openplayground_compare_settings", JSON.stringify(settings))
+      } else {
+        console.warn("Not clearing because..", settings, !settings.version, settings.version !== VERSION, settings.version , VERSION)
+      }
+
       if (settings.models)
         for (const saved_model of settings.models) {
           if (saved_model.is_clone) { //is_clone
@@ -633,17 +668,24 @@ export default function Compare() {
             }
             continue
           }
-
+          
+          console.log("Loading models from local storage....")
           for (const model of models) {
             if (saved_model.name === model.name) {
               model.tag = saved_model.tag
               model.state = saved_model.state
-              model.parameters = saved_model.parameters
+              if (saved_model.parameters) {
+                for (const [parameter_name, parameter_details] of Object.entries(saved_model.parameters)) {
+                  if (model.parameters[parameter_name]) {
+                    model.parameters[parameter_name].value = parameter_details.value
+                  }
+                }
+              }
             }
           }
         }
-      
-      setModelWithParameters(models)
+
+      setModelsWithParameters(models)
 
      
       if (Object.keys(settings).length !== 0) {
@@ -662,6 +704,7 @@ export default function Compare() {
         setAllSelected(settings.allSelected)
         setShowAllParameters(settings.showAllParameters)
         setHighlightModels(settings.highlightModels)
+        setShowProbabilities(settings.showProbabilities)
       }
     }
 
@@ -670,28 +713,29 @@ export default function Compare() {
 
   const firstUpdate = useRef(true);
 
-  console.warn("settings.allSelected", allSelected)
   useEffect(() => {
-    console.warn("firing....")
+    //console.warn("firing....")
     if (firstUpdate.current === false || localStorage.getItem("openplayground_compare_settings") === null) {
       let editorStateRaw = convertToRaw(editorState.getCurrentContent())
       const settings = JSON.stringify({
         model_name: model,
-      temperature: temperature,
-      maximum_length: maximumLength,
-      top_p: topP,
-      top_k: topK,
-      repetition_penalty: repetitionPenalty,
-      num_beams: numBeams,
-      num_return_sequences: numReturnSequences,
-      prompt: prompt,
-      editor_state: editorStateRaw,
-      stop_sequences: stopSequences,
-      preprompt: prePrompt,
-      models: modelsWithParameters,
-      allSelected: allSelected,
-      showAllParameters: showAllParameters,
-      highlightModels: highlightModels
+        temperature: temperature,
+        maximum_length: maximumLength,
+        top_p: topP,
+        top_k: topK,
+        repetition_penalty: repetitionPenalty,
+        num_beams: numBeams,
+        num_return_sequences: numReturnSequences,
+        prompt: prompt,
+        editor_state: editorStateRaw,
+        stop_sequences: stopSequences,
+        preprompt: prePrompt,
+        models: modelsWithParameters,
+        allSelected: allSelected,
+        showAllParameters: showAllParameters,
+        highlightModels: highlightModels,
+        showProbabilities: showProbabilities,
+        version: VERSION
       })
       localStorage.setItem("openplayground_compare_settings", settings)
     }
@@ -712,28 +756,14 @@ export default function Compare() {
     modelsWithParameters,
     allSelected,
     showAllParameters,
-    highlightModels
+    highlightModels,
+    showProbabilities
   ])
-
-  // HANDLE STREAMING CHARACTERS
-  const handleStream = (e: MessageEvent) => {
-    let resp = JSON.parse(e.data)
-    if (resp["message"] === "You have successfully connected.") {
-      return
-    }
-
-    let model_tag = ""
-    if (resp.hasOwnProperty("model_tag")) {
-      model_tag = resp["model_tag"]
-    }
-
-    notifyEditor(model_tag, resp)
-  }
 
   // EDITOR UPDATER
   useEffect(() => {
     // add to words array
-    console.log("OUTPUT:", output)
+    //console.log("OUTPUT:", output)
     const currentContent = editorState.getCurrentContent()
     // create new selection state where focus is at the end
     const blockMap = currentContent.getBlockMap()
@@ -781,6 +811,14 @@ export default function Compare() {
     regenerate = false,
     passedInPrompt = ""
   ) => {
+    // check to see if we can even do the generation
+    if (prompt.length > 5000) {
+      setDialogTitle("Prompt is too large!")
+      let dialogMessage = "Please reduce the size of your prompt for the generation to be submitted successfully. Your current size is " + prompt.length + " characters, however, we currently allow a maximum of 5000 characters." 
+      setDialogMessage(dialogMessage)
+      setOpenDialog(true)
+      return
+    }
     regenerate = false //Something is wrong here
     setGenerating(true)
     if (regenerate) {
@@ -789,28 +827,20 @@ export default function Compare() {
       setPrePrompt(prompt)
     }
     window.addEventListener('beforeunload', beforeUnloadHandler);
-    const sse = new EventSource(ENDPOINT_URL.concat("/api/listen"))
+    const completions_buffer = {};
 
-    function beforeUnloadHandler() {
-      sse.close()
-    }
-    sse.onopen = async () => {
-      // begin model loading and inference
-      abortController.current = new AbortController()
-      const res = await fetch(ENDPOINT_URL.concat("/api/compare"), {
-        signal: abortController.current.signal,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          uuid: uuid(),
+    const sse = new SSE(
+      ENDPOINT_URL.concat('/api/stream'),
+      {
+        headers: {},
+        payload: JSON.stringify({
           prompt: regenerate ? passedInPrompt : prompt,
           models: modelsWithParameters.map((model) => {
-            //is_clone ? model.name.split(":")[] 
             if(model.state.enabled) {
+              completions_buffer[model.tag] = [];
+
               return {
-                name: model.name, tag: model.tag, parameters: Object.keys(model.parameters).reduce(
+                name: model.name, tag: model.tag, provider: model.provider, parameters: Object.keys(model.parameters).reduce(
                 (acc, key) => {
                   acc[key] = model.parameters[key].value
                   return acc
@@ -819,34 +849,83 @@ export default function Compare() {
               }
             }
           }).filter(Boolean)
-        }),
-      })
-        .catch((e) => {
-          if (e.name === "AbortError") {
-            console.log("ABORTED")
+        })
+      }
+    )
+    
+    sseRef.current = sse;
+
+    function beforeUnloadHandler() {
+      sse.close()
+    }
+    sse.onopen = async () => {
+      //console.warn("Connection has been opened");
+      const bulk_write = () => {
+        setTimeout(() => {
+          let new_tokens = false;
+
+          for (let model_tag in completions_buffer) {
+            if (completions_buffer[model_tag].length > 0) {
+              new_tokens = true;
+              modelsCompletionState[model_tag] = [
+                ...(modelsCompletionState[model_tag] || []),
+                ...completions_buffer[model_tag].splice(0, completions_buffer[model_tag].length)
+              ];
+            }
           }
-        })
-        .finally(() => {
-          // close everything
-          sse.close()
-          setGenerating(false)
-          window.removeEventListener('beforeunload', beforeUnloadHandler);
-        })
+          //flushSync(() => {
+            if (new_tokens) setModelsCompletionState({...modelsCompletionState});
+           // console.log(generatingRef.current, "modelsCompletionState", modelsCompletionState)
+          //});
+         
+          if (generatingRef.current) bulk_write();
+        }, 20)
+      };
+      bulk_write();
+    }
+    sse.addEventListener("infer", (event) => {
+      let resp = JSON.parse(event.data)
+      //console.log("STREAMING " + resp["model_tag"] + " " + resp["message"])
+      completions_buffer[resp["model_tag"]].push(resp)
+    });
+
+    sse.addEventListener("status", (event) => {
+      let resp = JSON.parse(event.data)
+      //console.log("STATUS STREAMING " + resp["message"], resp)
+      notifyEditorStatus(resp["model_tag"], resp)
+    });
+
+    const close_sse = () => {
+      setGenerating(false)
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
     }
 
-    sse.onmessage = (e) => {
-      handleStream(e)
-    } // update the prompt state
-    // set proper endpoint for streaming
+    sse.addEventListener("error", (event) => {
+      //console.log("event", event)
+      const message = JSON.parse(event.data)
+      if (message.status === "Too many pending requests") {
+        setDialogTitle("Previous completion still running")
+        setDialogMessage("Please wait a few seconds before trying again.")
+        setOpenDialog(true)
+      }
+      close_sse();
+    });
 
+    sse.addEventListener("abort", (event) => {
+      console.log("abort", event)
+      close_sse();
+    });
 
-    console.log("calling fetch")
-    console.log(passedInPrompt)
+    sse.addEventListener("readystatechange", (event) => {
+      if (event.readyState === 2) close_sse();
+    });
+
+    sse.stream();
   }
 
   // ensure ref is up to date
   useEffect(() => {
-    showProbabilitiesRef.current = showProbabilities
+    generatingRef.current = generating
   })
 
   // rerender editor when probability checkbox is updated
@@ -858,36 +937,7 @@ export default function Compare() {
 
   // Dispatch the fetch request to appropriate endpoint and connection type
   const handleSubmit = async (regenerate = false, passedInPrompt = "") => {
-    for (const model in modelsWithParameters) {
-      if (modelsWithParameters[model].enabled) {
-        if (
-          model?.startsWith("cohere:") ||
-          model?.startsWith("openai:") ||
-          model?.startsWith("huggingface:")
-        ) {
-          if (
-            model?.startsWith("cohere:") &&
-            apiKeyAvailable["co:here"] === false
-          ) {
-            setOpenDialog(true)
-            return
-          } else if (
-            model?.startsWith("openai:") &&
-            apiKeyAvailable["OpenAI"] === false
-          ) {
-            setOpenDialog(true)
-            return
-          } else if (
-            model?.startsWith("huggingface:") &&
-            apiKeyAvailable["HuggingFace Hosted"] === false
-          ) {
-            setOpenDialog(true)
-            return
-          }
-        }
-      }
-    }
-
+    handleUndoLast();
     return handleStreamingSubmit(regenerate, passedInPrompt)
   }
 
@@ -907,10 +957,12 @@ export default function Compare() {
   }
 
   // abort the fetch if the user clicks the cancel button
-  const abortFetch = () =>
-    abortController.current &&
-    abortController.current.abort("User requested abort")
-
+  const abortFetch = () => {
+    if (sseRef.current) {
+      notifyEditorStatus("*", {message: "[ERROR] Cancelled by user"})
+      sseRef.current.close()
+    }
+  }
   // KEYBOARD SHORTCUT HANDLERS
 
   // Meta Key + Enter - Submit form
@@ -961,7 +1013,7 @@ export default function Compare() {
     return getDefaultKeyBinding(event)
   }
 
-  console.log('---> modelsWithParameters', modelsWithParameters)
+  //console.log('---> modelsWithParameters', modelsWithParameters)
   const number_of_models_selected = modelsWithParameters.filter(
     (model) => model.state.selected
   ).length
@@ -972,29 +1024,33 @@ export default function Compare() {
   const models_shared_keys = modelsWithParameters
     .filter((model) => model.state.enabled && (number_of_models_selected >= 1 ?  model.state.selected : true))
     .map((model) => model.parameters)
-    .flatMap((parameter) => {
-      console.log("parameter", parameter)
-      return Object.entries(parameter)
-        .filter(
-          ([key, _]) =>
-            key !== "enabled" && key !== "selected" && key !== "model_name"
-        )
-        .map(([key, parameter]) => ({ key, range: parameter["range"] }))
-        })
+    .flatMap((parameter) => Object.entries(parameter).map(([key, parameter]) => ({ key, range: parameter["range"] })))
     .reduce((acc, { key, range }) => {
       acc[key] = acc[key] || { range: [] }
       acc[key].range = [...new Set([...acc[key].range, ...range])]
-
       return acc
     }, {})
   
-    console.log("models_shared_keys", models_shared_keys)
 
   const models_shared_keys_copy = JSON.parse(JSON.stringify(models_shared_keys))
 
   const notifyEditor = (model_tag, message) => {
     if (modelEditorRefs.current[model_tag])
       modelEditorRefs.current[model_tag].handleNotification(message)
+  }
+
+  const notifyEditorStatus = (model_tag, message) => {
+    if (model_tag === "*") {
+      for(const model_tag in modelEditorRefs.current) {
+        if (modelEditorRefs.current[model_tag])
+          modelEditorRefs.current[model_tag].handleNotificationStatus(message)
+      }
+
+      return 
+    }
+  
+    if (modelEditorRefs.current[model_tag])
+      modelEditorRefs.current[model_tag].handleNotificationStatus(message)
   }
 
   const generate_table_line_graph = (parameter) => {
@@ -1075,7 +1131,7 @@ export default function Compare() {
         setStopSequences(parameters.stop_sequences.value || [])
     }
 
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((m) => {
         if (!ctrl_pressed && m.tag !== model.tag) {
           m.state.selected = false
@@ -1086,8 +1142,7 @@ export default function Compare() {
       })
     )
   }
-  const [isCollapsed, setIsCollapsed] = useState(true);
-  console.warn("Models with params", modelsWithParameters)
+
   //max-w-[1920px] 
   const textArea = (
     <form
@@ -1097,14 +1152,14 @@ export default function Compare() {
       }}
       className="flex flex-col grow basis-auto lg:max-w-[calc(100%-266px)] max-w-[100%]"
     >
-      <div className="h-[25%] flex">
+      <div className="min-h-[25%] max-h-[75%] flex border border-slate-400">
         <div
-          className={`relative p-3 overflow-hidden flex-1 flex flex-col loading_border`}
+          className={`relative overflow-hidden flex-1 flex flex-col p-2`}
         >
           <div
             ref={scrollRef}
             onClick={focusEditor}
-            className="overflow-y-auto editor-container h-[100%] w-full p-3 text-base"
+            className="overflow-y-auto editor-container h-[100%] w-full text-base"
           >
             <Editor
               placeholder={
@@ -1121,68 +1176,78 @@ export default function Compare() {
               onChange={(editorState: any) => {
                 setEditorState(editorState)
                 setPrompt(
-                  editorState.getCurrentContent().getPlainText("\u0001")
+                  editorState.getCurrentContent().getPlainText()
                 )
               }}
             />
           </div>
-          <div className="flex justify-end">
+          <div className="absolute bottom-[.5em] right-[1em] z-[2]">
             {generating && (
-              <Button
-                variant="default"
-                className="inline-flex items-center ml-1 text-sm font-medium text-center"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  abortFetch()
-                  modelsWithParameters.forEach((model) => {
-                    if(model.state.enabled) {
-                      notifyEditor(model.tag, {
-                        "model_name": model.name, "model_tag": model.tag,
-                        "message": "[ERROR] Generation aborted"
-                      })
-                    }
-                  })
-                }}
-                >
+              <Tooltip delayDuration={100}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="default"
+                  className="inline-flex items-center ml-1 text-sm font-medium text-center"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    abortFetch()
+                    modelsWithParameters.forEach((model) => {
+                      if(model.state.enabled) {
+                        notifyEditor(model.tag, {
+                          "model_name": model.name, "model_tag": model.tag,
+                          "message": "[ERROR] Generation aborted"
+                        })
+                      }
+                    })
+                  }}
+                  >
                   {" "}
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Cancel
-              </Button>)
-            }
-            {!modelLoading && !generating && (
-              <Button
-                disabled={prompt === "" || number_of_models_enabled === 0}
-                variant="default"
-                className="bg-emerald-500 hover:bg-emerald-700 inline-flex items-center ml-1 text-sm font-medium text-center"
-                type="submit"
-                value="submit"
-              >
-                Submit
               </Button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                align="center"
+                className="bg-slate-600 text-white hidden md:block"
+              >
+                Cancel &nbsp;
+                <kbd className="align-top pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-100 bg-slate-100 px-1.5 font-mono text-[10px] font-medium text-slate-600 opacity-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                  Escape
+                </kbd>
+                &nbsp;
+              </TooltipContent>
+            </Tooltip>)
+            }
+            {!generating && (
+              <Tooltip delayDuration={100}>
+              <TooltipTrigger asChild>
+                <Button
+                  disabled={prompt === "" || number_of_models_enabled === 0}
+                  variant="default"
+                  className="bg-emerald-500 hover:bg-emerald-700 inline-flex items-center ml-1 text-sm font-medium text-center"
+                  type="submit"
+                  value="submit"
+                >
+                  Submit
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                align="center"
+                className="bg-slate-600 text-white hidden md:block"
+              >
+                Submit &nbsp;
+                <kbd className="align-top pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-100 bg-slate-100 px-1.5 font-mono text-[10px] font-medium text-slate-600 opacity-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                {is_mac_os ? '⌘' : 'Control'}
+                </kbd>
+                &nbsp;
+                <kbd className="align-top pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-100 bg-slate-100 px-1.5 font-mono text-[10px] font-medium text-slate-600 opacity-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                  Enter
+                </kbd>
+              </TooltipContent>
+            </Tooltip>
             )}
-
-            <Button
-              type="button"
-              variant="subtle"
-              className="inline-flex items-center ml-2 text-sm font-medium text-center"
-              onClick={handleUndoLast}
-              disabled={prePrompt === ""}
-            >
-              Undo Last
-            </Button>
-            <Button
-              type="button"
-              variant="subtle"
-              className="inline-flex items-center ml-2 text-sm font-medium text-center"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleUndoLast()
-                handleSubmit(true, prePrompt)
-              }}
-              disabled={prePrompt === ""}
-            >
-              Regenerate Output
-            </Button>
           </div>
         </div>
       </div>
@@ -1262,10 +1327,14 @@ export default function Compare() {
               number_of_models_enabled === 1 
                   ? 'grid-cols-1 gap-1 sm:grid-cols-1 md:grid-cols-1 lg:grid-cols-2'
                   : number_of_models_enabled === 2 
-                  ? 'grid-cols-1 gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3 3xl:grid-cols-3 5xl:grid-cols-4 6xl:grid-cols-5 8xl:grid-cols-6'
+                  ? 'grid-cols-1 gap-3 sm:grid-cols-1 md:grid-cols-2'
+                  : number_of_models_enabled === 3
+                  ? 'grid-cols-1 gap-3 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+                  : number_of_models_enabled === 4 
+                  ? 'grid-cols-1 gap-3 gap-3 sm:grid-cols-1 md:grid-cols-2'
                   : 'grid-cols-1 gap-2 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-4 5xl:grid-cols-5 6xl:grid-cols-6 8xl:grid-cols-8'
               }
-            }`}
+            `}
             > {
               modelsWithParameters
               .filter((model) => model.state.enabled)
@@ -1277,13 +1346,14 @@ export default function Compare() {
                     unmountOnExit
                     key ={model.tag}>
                     <ModelCard
-                        handleSelectModel={handleSelectModel}
-                        key={model.tag}
-                        model={model}
-                        showProbabilities={showProbabilities}
-                        showHighlights={highlightModels}
-                        ref={(ref) => (modelEditorRefs.current[model.tag] = ref) }
-                      />
+                      completion = {modelsCompletionState[model.tag] || []}
+                      handleSelectModel={handleSelectModel}
+                      key={model.tag}
+                      model={model}
+                      showProbabilities={showProbabilities}
+                      showHighlights={highlightModels}
+                      ref={(ref) => (modelEditorRefs.current[model.tag] = ref) }
+                    />
                   </CSSTransition>
                 )
               })
@@ -1293,14 +1363,8 @@ export default function Compare() {
     </form>
   )
 
-  function getModelProviderForStoredModel(model: string) {
-    const model_key = "model_" + model.split(":")[1]
-    const model_info = JSON.parse(localStorage.getItem(model_key) || "{}")
-    return model_info.model_provider
-  }
-
   const handleTempertureChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.temperature &&
@@ -1314,7 +1378,7 @@ export default function Compare() {
   }
 
   const handleTopPChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.top_p &&
@@ -1328,7 +1392,7 @@ export default function Compare() {
   }
 
   const handleTopKChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.top_k &&
@@ -1342,7 +1406,7 @@ export default function Compare() {
   }
 
   const handleNumReturnChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.num_return_sequences &&
@@ -1356,7 +1420,7 @@ export default function Compare() {
   }
 
   const handleNumBeamsChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.num_beams &&
@@ -1370,7 +1434,7 @@ export default function Compare() {
   }
 
   const handleMaxLengthChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.maximum_length &&
@@ -1384,7 +1448,7 @@ export default function Compare() {
   }
 
   const handleFrequencyPenaltyChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.frequency_penalty &&
@@ -1398,7 +1462,7 @@ export default function Compare() {
   }
 
   const handlePresencePenaltyChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.presence_penalty &&
@@ -1412,7 +1476,7 @@ export default function Compare() {
   }
 
   const handleRepetitionPenaltyChange = (value: number) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.repetition_penalty &&
@@ -1426,7 +1490,7 @@ export default function Compare() {
   }
 
   const handleStopSequencesChange = (value: string[]) => {
-    setModelWithParameters(
+    setModelsWithParameters(
       modelsWithParameters.map((model) => {
         if (
           model.parameters.stop_sequences &&
@@ -1442,7 +1506,9 @@ export default function Compare() {
 
   const should_disable_slider = (parameter_range, name) => {
     //console.log("should_disable_slider", parameter_range, name)
+    //console.warn("CHECK THIS", name, parameter_range)
     if (number_of_models_enabled === 0) return true
+    //console.log("should_disable_slider", parameter_range, name)
     if (parameter_range && parameter_range.range.length > 2) return true
     return false
   }
@@ -1469,13 +1535,14 @@ export default function Compare() {
   
 
   const parameterSidebar = (
-    <div className="flex flex-col max-h-[100%] sm:pt-3 md:pt-[0px] lg:pt-[0px]">
+    <div className="flex flex-col max-h-[100%] pt-4 sm:pt-4 md:pt-[0px] lg:pt-[0px]">
       <div className="flex mb-2">
         <span className="cursor-default flex-1 flow-root inline-block align-middle">
           <p className="text-sm font-medium float-left align-text-top">
             Parameters
           </p>
         </span>
+        <input type="hidden" />
         <Tooltip delayDuration={300} skipDelayDuration={150}>
           <TooltipTrigger asChild>
             <div
@@ -1573,7 +1640,7 @@ export default function Compare() {
           title="Top P"
           type="number"
           defaultValue={topP}
-          disabled={should_disable_slider()}
+          disabled={should_disable_slider(models_shared_keys["top_p"])}
           onChangeValue={handleTopPChange}
           min={
             should_disable_slider(models_shared_keys_copy["top_p"])
@@ -1779,7 +1846,7 @@ export default function Compare() {
           }
         />
 
-        {/* <Tooltip delayDuration={300} skipDelayDuration={150}>
+        <Tooltip delayDuration={300} skipDelayDuration={150}>
           <TooltipTrigger asChild>
             <div className="cursor-default flex justify-between align-middle inline-block align-middle mb-1">
               <p className="text-sm font-normal float-left align-text-top">
@@ -1799,7 +1866,7 @@ export default function Compare() {
               token was to be generated,<br/> if the model supports it.
             </p>
           </TooltipContent>
-        </Tooltip> */}
+        </Tooltip>
 
         <Tooltip delayDuration={300} skipDelayDuration={150}>
           <TooltipTrigger asChild>
@@ -1830,7 +1897,7 @@ export default function Compare() {
             <TooltipTrigger asChild>
             <XCircle
                 onClick={() => {
-                  setModelWithParameters(modelsWithParameters.map((m) => {
+                  setModelsWithParameters(modelsWithParameters.map((m) => {
                     m.state.selected = false
                     return m
                   }))
@@ -1855,8 +1922,7 @@ export default function Compare() {
           <Checkbox
             checked={allSelected}
             onCheckedChange={(val: boolean) => {
-              console.log("all selected", val)
-              setModelWithParameters(
+              setModelsWithParameters(
                 modelsWithParameters.map((m) => {
                   m.state.enabled = val
                   m.state.selected = false
@@ -1870,10 +1936,30 @@ export default function Compare() {
           />
    
       </div>
-      <div className="overflow-auto flex-1">
-        <ul className="overflow-auto">
+
+      <div className="my-2 flex flex-row border-slate-300 border p-2 rounded">
+        <div className = "flex items-center">
+          <Filter size ={18}/>
+        </div>
+
+        <div className = "ml-2 flex-1 mr-2">
+          <input
+            className="outline-0"
+            style = {{width: "100%"}}
+            value = {modelSearchValue}
+            onChange={(event) => {
+              setModelSearchValue(event.target.value)
+            }}
+            placeholder="Model Name"
+          />
+        </div>
+      </div>
+      <div>
+        <ul>
           {
-            modelsWithParameters.map((model: any) => (
+            modelsWithParameters
+              .filter((model: any) => (modelSearchValue !== '' ? model.name.toLowerCase().indexOf(modelSearchValue.toLowerCase()) !== -1 : true))
+              .map((model: any) => (
             <div
               key={`selected_${model.tag}`}
               className={`relative select-none my-2 flex justify-center items-center rounded-md border border-slate-200 font-mono text-sm dark:border-slate-700 overflow-hidden ${
@@ -1898,7 +1984,7 @@ export default function Compare() {
                 {model.name.split(":")[1]}
                 <br />
                 <span style={{ fontSize: "12px" }}>
-                  Provider: <i>{getModelProviderForStoredModel(model.name)}</i>
+                  Provider: <i>{model.provider}</i>
                 </span>
                 <br />
               </div>
@@ -1909,11 +1995,12 @@ export default function Compare() {
                 onClick={() => {
                   const index_of_model = modelsWithParameters.findIndex((m: any) => m.name === model.name)
                   const name_fragments = model.name.split(":")
-                  setModelWithParameters([
+                  setModelsWithParameters([
                     ...modelsWithParameters.slice(0, index_of_model + 1),
                     {
                       name: model.name,
                       parameters: model.parameters,
+                      provider: model.provider,
                       state: model.state,
                       is_clone: true,
                       tag: `${name_fragments[0]}:${name_fragments[1]}:${uuid()}`
@@ -1928,7 +2015,7 @@ export default function Compare() {
                 key={model.tag}
                 checked={model.state.enabled}
                 onCheckedChange={(val: boolean) => {
-                  setModelWithParameters(
+                  setModelsWithParameters(
                     modelsWithParameters.map((m: any) => {
                       if (m.tag === model.tag) {
                         return {
@@ -1936,6 +2023,7 @@ export default function Compare() {
                           state: {
                             ...m.state,
                             enabled: val,
+                            selected: false,
                           },
                         }
                       }
@@ -1950,7 +2038,7 @@ export default function Compare() {
                   size={10}
                   className="absolute bottom-2 right-2"
                   onClick={() => {
-                    setModelWithParameters(modelsWithParameters.filter((m: any) => m.tag !== model.tag))
+                    setModelsWithParameters(modelsWithParameters.filter((m: any) => m.tag !== model.tag))
                   }}
                 />) : null
               }
@@ -1965,10 +2053,12 @@ export default function Compare() {
     <Sheet open={openParameterSheet} onOpenChange={setSaveOpenParameterSheet}>
       <SheetTrigger asChild>
         <Button variant="subtle" className="lg:hidden">
-          <Settings2 className="h-4 w-4" />
+          <Settings2 className="h-6 w-6" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[60vw] ">{parameterSidebar}</SheetContent>
+      <SheetContent className="w-[80vw]">
+        {parameterSidebar}
+      </SheetContent>
     </Sheet>
   )
 
@@ -1976,9 +2066,8 @@ export default function Compare() {
     <div className="flex flex-col h-full">
       <NavBar tab="compare">
         {/* mobile line break  */}
-        <div className="basis-full h-0 lg:hidden bg-green-700"></div>
-        <div className="mt-4 lg:mt-0 lg:ml-auto flex basis-full lg:basis-auto flex-wrap lg:flex-nowrap">
-          <div className="flex basis-full mb-2 lg:mb-0">             
+        <div className="align-middle mt-1">
+          <div className="flex basis-full mb-2 lg:mb-0 space-x-2">
             {mobileOpenParametersButton}
           </div>
         </div>
@@ -1986,23 +2075,19 @@ export default function Compare() {
       <AlertDialog open={openDialog} onOpenChange={setOpenDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>You are missing an API key!</AlertDialogTitle>
+            <AlertDialogTitle>{dialogTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              Go to the settings page and submit your API key to use this{" "}
-              {model?.startsWith("openai:") && "Open AI "}{" "}
-              {model?.startsWith("huggingface:") && "HuggingFace Hub "}{" "}
-              {model?.startsWith("cohere:") && "co:here"}
-              model
+              <p className="text-base text-slate-700 dark:text-slate-400">{dialogMessage}</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction>Got it</AlertDialogAction>
+            <AlertDialogAction>Ok</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <div className="flex flex-grow flex-col font-display min-h-0 min-w-0">
         {/* TEXTAREA COMPONENT */}
-        <div className="flex flex-row space-x-4 flex-grow ml-5 mr-5 min-h-0 min-w-0">
+        <div className="flex flex-row space-x-4 flex-grow mx-2 md:ml-5 lg:ml-5 min-h-0 min-w-0">
           {textArea}
           <div className="hidden p-1 grow-0 shrink-0 basis-auto lg:w-[250px] overflow-auto lg:block">
             {parameterSidebar}

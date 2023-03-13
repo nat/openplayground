@@ -11,7 +11,9 @@ export const useMetaKeyPress = (keys: any, callback: any, node = null) => {
   const handleKeyPress = useCallback(
     (event: any) => {
       // check if one of the key is part of the ones we want
-      if (!event.ctrlKey && event.metaKey && keys.some((key: any) => event.key === key)) {
+      console.log("keys", event)
+
+      if ((event.ctrlKey || event.metaKey) && keys.some((key: any) => event.key === key)) {
         callbackRef.current(event)
       }
     },

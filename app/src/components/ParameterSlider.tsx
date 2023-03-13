@@ -77,6 +77,7 @@ const ParamaterSlider: React.FC<ParameterSliderProps> = ({
                 type={type}
                 value={[value.toString()]}
                 step={step}
+                autoFocus={false}
                 onChange={(e) => {
                   if (normalizeInputData) {
                     let normalized = normalizeInputData(e.target.value)
@@ -85,6 +86,7 @@ const ParamaterSlider: React.FC<ParameterSliderProps> = ({
 
                     setValue(normalized)
                     setParentState(normalized)
+                    if (onChangeValue) onChangeValue(normalized)
                   }
                 }}
                 onBlur={(e) => {
