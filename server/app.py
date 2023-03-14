@@ -102,7 +102,6 @@ def stream_inference():
     '''
     Takes in inference request from frontend, checks for valid parameters, and dispatchees to inference queue
     '''
-        
     data = request.get_json(force=True)
     print(f"Path: {request.path}, Request: {data}")
 
@@ -111,10 +110,11 @@ def stream_inference():
     
     request_uuid = "1"
     # request.data = json.dumps({"uuid": request_uuid})
+    models_json = json.load(open('models.json',))
 
     prompt = data['prompt']
     models = data['models']
-    providers = ["openai", "cohere", "huggingface", "forefront", "textgeneration", "anthropic"]
+    providers = models_json.keys()
 
     all_tasks = []
     models_name_provider = []
@@ -153,6 +153,8 @@ def stream_inference():
         elif provider == "anthropic":
             name = name.removeprefix("anthropic:")
             required_parameters = ["temperature", "top_p",  "top_k", "maximum_length", "stop_sequences"]
+        else:
+            raise ValueError(f"Invalid provider: {provider}, please define a valid parameters for this provider")
 
         for param in required_parameters:
             if param not in parameters:
@@ -198,6 +200,7 @@ def all_models():
 
     sorted_models = {}
     
+    # add stuff for models we don't have set 
     for provider in providers:
         for model_tag, model in models_by_provider[provider]:
             model_tag = f"{provider}:{model_tag}"
@@ -957,6 +960,8 @@ class ModelManager:
             return self.inference_manager.forefront_text_generation(provider_details, inference_request)
         elif inference_request.model_provider == "textgeneration":
             return self.inference_manager.hosted_text_generation(provider_details, inference_request)
+        else:
+            raise Exception(f"Unknown model provider, {inference_request.model_provider}. Please add a generation function in InferenceManager or route in ModelManager.text_generation")
     
     def get_announcer(self):
         return self.inference_manager.get_announcer()
