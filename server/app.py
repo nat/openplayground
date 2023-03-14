@@ -97,7 +97,6 @@ def create_response_message(message: str, status_code: int) -> Response:
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
-#@app.before_request
 @app.route("/api/stream", methods=["POST"])
 def stream_inference():
     '''
@@ -140,7 +139,6 @@ def stream_inference():
             name = name.removeprefix("openai:")
             required_parameters = ["temperature", "top_p", "maximum_length", "stop_sequences", "frequency_penalty", "presence_penalty", "stop_sequences"]
         elif provider == "cohere":
-            print("identified cohere")
             name = name.removeprefix("cohere:")
             required_parameters = ["temperature", "top_p", "top_k", "maximum_length", "presence_penalty", "frequency_penalty", "stop_sequences"]
         elif provider == "huggingface":
@@ -178,9 +176,6 @@ def stream_inference():
 
     if len(all_tasks) > 0:
         bulk_completions(all_tasks)
-        # gevent.spawn(bulk_completions, all_tasks) #lock
-        #else:
-        #return create_response_message("Too many pending requests", 429)
         return create_response_message(message="success", status_code=200)
     else:
         print("sending response back")
@@ -189,7 +184,8 @@ def stream_inference():
 @app.route('/api/all_models', methods=['GET'])
 def all_models():
     print("recieved request for all models")
-    providers = ["forefront", "anthropic", "textgeneration", "huggingface", "cohere", "openai"]
+    models_json = json.load(open('models.json',))
+    providers = models_json.keys()
     models_by_provider = {}
     for provider in providers:
         models_by_provider[provider] = []
@@ -216,10 +212,20 @@ def all_models():
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
-# Routes to store, reload, and check API keys
-# Store API key in .env file, for given provider
+@app.route('/api/providers', methods=['GET'])
+def providers():
+    '''
+    Returns a version of models.json to be used for settings page
+    Differs from all_models - it includes providers with no models (hugging face remote)
+    And as well as locally inference models
+    '''
+
 @app.route('/api/store-api-key', methods=['POST'])
 def store_api_key():
+    '''
+    Routes to store, reload, and check API keys
+    Store API key in .env file, for given provider
+    '''
     data = request.get_json(force=True)
     print(data)
     model_provider = data['model_provider'].lower()
