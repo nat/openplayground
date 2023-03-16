@@ -336,7 +336,7 @@ export default function Settings() {
             <h1 className="scroll-m-20 text-3xl mb-5 font-extrabold tracking-tight hidden lg:inline-block">
               Providers
             </h1>
-            {!dataLoading && allAvailableProviders.map((tag: any) => (
+            {!dataLoading && allAvailableProviders && allAvailableProviders.map((tag: any) => (
               <React.Fragment key={tag}>
                 <Button
                   key={tag}
@@ -514,7 +514,7 @@ export default function Settings() {
                 <form onSubmit={handleModelSubmit}>
                   <div className="min-h-[320px] w-full border rounded-md mt-2">
                     <div className="p-2">
-                      {!dataLoading && availableModelMap[modelProvider].map((model: any) => (
+                      {!dataLoading && availableModelMap && availableModelMap[modelProvider].map((model: any) => (
                         <div
                           key={model}
                           className="rounded-md border border-slate-200 px-4 py-3 my-2 font-mono text-sm dark:border-slate-700"

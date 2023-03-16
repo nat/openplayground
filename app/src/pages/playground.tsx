@@ -477,11 +477,9 @@ export default function Playground() {
         Object.entries(localstorage_model_dict).forEach(([model_key, model_name]) => {
           console.log(model_key, model_name)
           let provider = model_key.split(":")[0]
-          console.log(provider)
+          console.log("provider in localstoragemodeldict", provider)
           let params = providers_params[provider]
-          console.log(params)
           if (params) {
-              console.log(params)
                 models.push({
                 parameters: params.parameters,
                 name: model_key,
@@ -496,24 +494,29 @@ export default function Playground() {
             }
         })
       }
-      console.log(models)
-      // if (availableModels) {
-      //   console.log("availableModels", availableModels)
-      //   Object.entries(availableModels).forEach(([model_key, model_name]) => {
-      //     console.warn(model_key, model_name)
-      //     let provider = model_key.split(":")[0]
-      //     let params = providers_params[provider]
-      //     models.push({
-      //       ...params.parameters,
-      //       name: model_key,
-      //       tag:  provider,
-      //       state: {
-      //         enabled: true,
-      //         selected: false,
-      //       }
-      //     })
-      //   })
-      // }
+
+      if (availableModels) {
+        console.log("availableModels", availableModels)
+        Object.entries(availableModels).forEach(([model_key, model_name]) => {
+          console.log(model_key, model_name)
+          let provider = model_key.split(":")[0]
+          console.log("provider in available models", provider)
+          let params = providers_params[provider]
+          if (params) {
+                models.push({
+                parameters: params.parameters,
+                name: model_key,
+                tag:  model_key,
+                provider: provider,
+                state: {
+                  enabled: true,
+                  selected: false,
+                }
+              })
+              console.log(models)
+            }
+        })
+      }
 
       console.log(models)
       console.log(model_dict)

@@ -64,6 +64,7 @@ import { uuid } from 'uuidv4';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { InputArea } from "../components/inputarea"
 
+
 // CONSTANTS
 const ENDPOINT_URL = process.env.NODE_ENV === "production" || !process.env.ENDPOINT_URL ? "" : process.env.ENDPOINT_URL
 
@@ -565,6 +566,7 @@ export default function Compare() {
 
   const [modelsWithParameters, setModelsWithParameters] = React.useState<any>([])
   const modelEditorRefs = useRef({})
+  const { availableModels, setAvailableModels } = useContext(ModelContext)
 
   // TEXT AREA CONTROL
   const [prompt, setPrompt] = React.useState<string>("")
@@ -610,16 +612,55 @@ export default function Compare() {
   // PRESET LOADING and MODEL LOADING ON PAGE LOAD
   useEffect(() => {
     const fetchDefaultParameters = async () => {
-      const response = await fetch(
+
+      // getting selected models from local storage
+      let model_keys = Object.keys(localStorage)
+        .filter((key_name) => {
+          if (key_name.startsWith("model_")) {
+            return true
+          }
+          return false
+        })
+        .map(function (item, i) {
+          return item.replace("model_", "")
+      })
+
+      var localstorage_model_dict = {}
+      model_keys.map((modelName) => {
+        let model_value = JSON.parse(
+          localStorage.getItem("model_" + modelName) || "{}"
+        )
+        let modelProvider = model_value.model_provider
+        // check to make sure its downloaded and not already in available models state
+        let model_key = `${modelProvider}:${modelName}`
+        if (
+          availableModels[model_key] === undefined &&
+          model_value.available === true
+        ) {
+          // add to dict on two conditions
+          // not already there (set from downloaded state from before and prevent re-adding)
+          // and is available for inference
+          localstorage_model_dict[model_key] = modelName
+        }
+      })
+
+      // fetching all available models and their parameters
+      const all_models_response = await fetch(
         ENDPOINT_URL.concat("/api/all_models"),
         {
-          method: "GET",
-          headers: { 
-          } 
+          method: "GET"
+        }
+      )
+
+      const providers_response = await fetch(
+        ENDPOINT_URL.concat("/api/providers"),
+        {
+          method: "GET"
         }
       )
       
-      const json_params = await response.json();
+      const json_params = await all_models_response.json();
+      const json_providers = await providers_response.json();
       const models = [];
       const default_enabled_models = [
         'command-xlarge-nightly',
@@ -641,6 +682,58 @@ export default function Compare() {
 
         models.push(model)
       })
+
+      if (localstorage_model_dict) {
+        console.log("localstorage_model_dict", localstorage_model_dict)
+        Object.entries(localstorage_model_dict).forEach(([model_key, model_name]) => {
+          console.log(model_key, model_name)
+          let provider = model_key.split(":")[0]
+          console.log("provider in localstoragemodeldict", provider)
+          let params = json_providers[provider]
+          if (params) {
+                models.push({
+                parameters: params.parameters,
+                name: model_key,
+                tag:  model_key,
+                provider: provider,
+                state: {
+                  enabled: true,
+                  selected: false,
+                }
+              })
+              console.log(models)
+            }
+        })
+      }
+
+      if (availableModels) {
+        console.log("availableModels", availableModels)
+        Object.entries(availableModels).forEach(([model_key, model_name]) => {
+          console.log(model_key, model_name)
+          let provider = model_key.split(":")[0]
+          console.log("provider in available models", provider)
+          let params = json_providers[provider]
+          if (params) {
+                models.push({
+                parameters: params.parameters,
+                name: model_key,
+                tag:  model_key,
+                provider: provider,
+                state: {
+                  enabled: true,
+                  selected: false,
+                }
+              })
+              console.log(models)
+            }
+        })
+      }
+
+      // we look at available models -- (selected models, and if there are some that need to be set within models with parameters we do that (like textgeneration or huggingface remote models))
+      setAvailableModels((availableModels: any) => ({
+        ...availableModels,
+        ...localstorage_model_dict,
+      }))
 
       let settings = JSON.parse(localStorage.getItem("openplayground_compare_settings") || "{}")
 

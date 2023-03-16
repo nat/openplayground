@@ -144,7 +144,11 @@ class HFInference:
                 
                 curr_token = ""
 
-            # dispatch last token, if we can
-            if curr_token != "": 
-                yield curr_token # send only if non empty
+        # dispatch last token, if we can
+        if curr_token != "": 
+            yield curr_token # send only if non empty
+
+        print(f'[FINAL]: {sentence}')
+        
+
            
