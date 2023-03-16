@@ -180,7 +180,7 @@ export default function Settings() {
     // just to see if this works
     setDataLoading(true)
     // let model_keys = {}
-    const preloadCacheData = async () => {
+    const preloadData = async () => {
         const model_res = await fetch(ENDPOINT_URL.concat("/api/get-models-in-cache"))
         const cached_data = await model_res.json()
         let models = cached_data.models
@@ -191,58 +191,44 @@ export default function Settings() {
         });
         // set if models downloaded
         setDownloadedModels(cached_models)
-        console.log("settings render done")
-        console.log("api key available", modelsInformation)
-    }
-    preloadCacheData()
 
-    let modelMap = {}
-    let modelProviders = []
+        let modelMap = {}
+        let modelProviders = []
 
-    const preloadAllModelsData = async (modelMap, modelProviders) => {
-      const res = await fetch(ENDPOINT_URL.concat("/api/all_models"))
-      const json_params = await res.json()
-      console.log("in settings all models", json_params)
-  
-      for (const [key, value] of Object.entries(json_params)) {
-        if (!(modelProviders.includes(value.provider))) {
-          modelProviders.push(value.provider)
+        const all_models_res = await fetch(ENDPOINT_URL.concat("/api/all_models"))
+        const all_models_json = await all_models_res.json()
+    
+        for (const [key, value] of Object.entries(all_models_json)) {
+          if (!(modelProviders.includes(value.provider))) {
+            modelProviders.push(value.provider)
+          }
+          if (!(value.provider in modelMap)) {
+            modelMap[value.provider] = []
+          } 
+          modelMap[value.provider].push(value.name)
         }
-        if (!(value.provider in modelMap)) {
-          modelMap[value.provider] = []
-        } 
-        modelMap[value.provider].push(value.name)
-      }
 
-      console.log(modelMap)
-      console.log(modelProviders)
-    }
-    preloadAllModelsData(modelMap, modelProviders)
+        const providers_res = await fetch(ENDPOINT_URL.concat("/api/providers"))
+        const providers_params = await providers_res.json()
+        console.log("in settings for providers", providers_params)
 
-    const preloadProvidersData = async (modelMap, modelProviders) => {
-      const res = await fetch(ENDPOINT_URL.concat("/api/providers"))
-      const json_params = await res.json()
-      console.log("in settings for providers", json_params)
-
-      for (const [key, value] of Object.entries(json_params)) {
-        if (!(modelProviders.includes(key)) && key !== "default") {
-          modelProviders.push(key)
+        for (const [key, value] of Object.entries(providers_params)) {
+          if (!(modelProviders.includes(key)) && key !== "default") {
+            modelProviders.push(key)
+          }
+          if (key == "textgeneration" || key == "huggingface") {
+            modelMap[key] = huggingFaceSearchResults
+          }
         }
-        if (key == "textgeneration" || key == "huggingface") {
-          modelMap[key] = huggingFaceSearchResults
-        }
-      }
 
-      console.log(modelMap)
-      console.log(modelProviders)
+        console.log(modelMap)
+        console.log(modelProviders)
 
-      setAvailableModelMap(modelMap)
-      setAllAvailableProviders(modelProviders)
-      setDataLoading(false)
+        setAvailableModelMap(modelMap)
+        setAllAvailableProviders(modelProviders)
+        setDataLoading(false)
     }
-
-    preloadProvidersData(modelMap, modelProviders)
-
+    preloadData()
   }, [])
 
   useEffect(() => {

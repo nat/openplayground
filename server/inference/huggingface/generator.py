@@ -30,6 +30,10 @@ def greedy_search_generator(
     synced_gpus: Optional[bool] = False,
     **model_kwargs,
 ) -> Union[GreedySearchOutput, torch.LongTensor]:
+    """
+    Generates sequences for models with a language modeling head using greedy decoding.
+    Monkey patched function to create a generator for next_token - allows for token streaming
+    """
     # init values
     logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
     stopping_criteria = stopping_criteria if stopping_criteria is not None else StoppingCriteriaList()

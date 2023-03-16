@@ -1511,6 +1511,13 @@ export default function Playground() {
         <span className="flow-root inline-block align-middle">
           <p className="text-sm font-medium float-left align-text-top">Model</p>
         </span>
+        {modelsEmpty && (
+          <span className="flow-root inline-block align-middle mb-2">
+            <p className="text-sm font-medium float-left align-text-top text-gray-500">
+              Add models via the settings page
+            </p>
+          </span>
+        )}
         <Select
           value={model != "" ? model : undefined}
           onValueChange={(value) => {

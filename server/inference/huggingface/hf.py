@@ -74,21 +74,8 @@ class HFInference:
             **kwargs
         ):
         '''
-        Generate text from prompt
+        Generate text from prompt, using monkey patched transformers.generation.utils.GenerationMixin.greedy_search
         '''
-        # set stopping criteria
-        # TODO: bring back when frontend sends it over
-        # stopping_criteria = StoppingCriteriaList()
-        # if stop_token is not None:
-        #     stopping_criteria.append(StoppingCriteria(stop_token))
-        # # set up inputs and tokenize
-        # stopping_criteria = None
-        # stop_sequences = stop_sequences
-        # if stop_sequences:
-        #     stop_words_ids = [self.tokenizer.encode(stop_word) for stop_word in stop_sequences]
-        #     stopping_criteria = StoppingCriteriaList([StoppingCriteriaSub(stops=stop_words_ids)])
-        # print(stopping_criteria)
-        # set up inputs and tokenize
         inputs_str = prompt.strip()
         inputs = self.tokenizer(inputs_str, return_tensors="pt")
         input_ids = inputs['input_ids'].to(DEVICE)

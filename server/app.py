@@ -284,6 +284,7 @@ def store_api_key():
     provider_key = model_provider + "_API_KEY"
    
     set_key(DOTENV_FILE, provider_key, model_provider_value)
+    load_dotenv(override=True) # reload .env file
 
     response = jsonify({'status': 'success'})
     response.headers.add('Access-Control-Allow-Origin', '*')
