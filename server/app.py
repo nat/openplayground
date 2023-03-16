@@ -1,7 +1,3 @@
-# import gevent
-# from gevent import monkey
-# monkey.patch_all(thread=False, socket=False)
-
 import json
 import os
 import time
@@ -9,8 +5,8 @@ import cachetools
 import requests
 import sseclient
 from sse import Message
-import sseserver as sse_server
 from sseserver import SSEQueueWithTopic, SSEQueue
+import traceback
 import queue
 import math
 import openai
@@ -27,9 +23,18 @@ from flask import Flask, request, jsonify, Response, abort, send_from_directory,
 from flask_cors import CORS
 from huggingface_hub import hf_hub_download, try_to_load_from_cache, scan_cache_dir, _CACHED_NO_EXIST
 
+from inference.huggingface.hf import HFInference
+
 from transformers import T5Tokenizer
 google_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-xl")
 
+# Monkey patching for warnings, for convenience
+def warning_on_one_line(message, category, filename, lineno, file=None, line=None):
+    return '%s:%s: %s: %s\n' % (filename, lineno, category.__name__, message)
+
+warnings.formatwarning = warning_on_one_line
+
+# Setting up .env file for API keys
 DOTENV_FILE = find_dotenv()
 if not DOTENV_FILE:
     warnings.warn("No .env file found, using default environment variables, creating one locally")
@@ -40,7 +45,6 @@ load_dotenv(override=True)
 
 # global sse server manager
 SSE_MANAGER = SSEQueue()
-# SSE_MANAGER.start()
 
 app = Flask(__name__, static_folder='../app/dist')
 @app.route('/', defaults={'path': ''})
@@ -83,7 +87,7 @@ def listen():
                 yield str(Message(**message))
         except GeneratorExit:
             print("SSE Terminated")
-            SSE_MANAGER.sse_publish("cancel_inference", message=json.dumps({"uuid": uuid}))
+            SSE_MANAGER.announce(message=json.dumps({"uuid": uuid}))
             print("GeneratorExit")
         finally:
             #close and clean up redis connection
@@ -218,10 +222,54 @@ def all_models():
 @app.route('/api/providers', methods=['GET'])
 def providers():
     '''
-    Returns a version of models.json to be used for settings page
-    Differs from all_models - it includes providers with no models (hugging face remote)
-    And as well as locally inference models
+    Returns providers that do not have models defined (HF remote, local inference models).
+    These are defined as providers with no model tag but parameters tag instead.
+    Optionally, for remote inference providers, a search endpoint can be defined as well for getting model information.
+    Parameter defaults and ranges set for these providers will be respected for all models from that provider.
+    For locally inferenced models, only parameters need to be defined.
+
+    Returns:
+        Response: json object with providers and their information
+    
+    Example:
+        {
+            "huggingface": {
+                "search": {
+                    "url": "https://huggingface.co/models"
+                },
+                "parameters": {
+                    "temperature": {
+                        "default": 0.7,
+                        "range": [0.0, 1.0]
+                    },
+            },
+            "llama": {
+                "parameters": {
+                    "temperature": {
+                        "default": 0.7,
+                        "range": [0.0, 1.0]
+                    },
+                }
+            }
+        }
     '''
+    models_json = json.load(open('models.json',))
+    providers = models_json.keys()
+    info_by_provider = {}
+
+    for provider in providers:
+        if "models" not in models_json[provider]:
+            info_by_provider[provider] = models_json[provider]
+
+    response = app.response_class(
+        response=json.dumps(info_by_provider),
+        status=200,
+        mimetype='application/json'
+    )
+
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
 
 @app.route('/api/store-api-key', methods=['POST'])
 def store_api_key():
@@ -231,18 +279,10 @@ def store_api_key():
     '''
     data = request.get_json(force=True)
     print(data)
-    model_provider = data['model_provider'].lower()
+    model_provider = data['model_provider'].upper()
     model_provider_value = data['api_key']
-    if (model_provider == "openai"):
-        provider_key = "OPENAI_API_KEY"
-    elif (model_provider == "cohere"):
-        provider_key = "COHERE_API_KEY"
-    elif (model_provider == "huggingface"):
-        provider_key = "HF_API_KEY"
-    elif (model_provider == "forefront"):
-        provider_key = "FOREFRONT_API_KEY"
-    else:
-        provider_key = "UNKNOWN_API_KEY"
+    provider_key = model_provider + "_API_KEY"
+   
     set_key(DOTENV_FILE, provider_key, model_provider_value)
 
     response = jsonify({'status': 'success'})
@@ -282,8 +322,58 @@ def check_key_store():
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
+@app.route('/api/download-model', methods=['POST'])
+def request_model_download():
+    '''
+    Downloads model from huggingface, in background. 
+    If model already exists in cache, returns "already downloaded"
+
+    Returns:
+        Response: json object with status of download
+    '''
+    data = request.get_json(force=True)
+    print(data)
+    model_name = data['model_name'].removeprefix("textgeneration:")
+    filepath = try_to_load_from_cache(model_name, filename="pytorch_model.bin")
+    if isinstance(filepath, str):
+        response = jsonify({'status': 'already downloaded'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
+    else:
+        download_model(model_name)
+        response = jsonify({'status': 'success'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
+
+@app.route('/api/model-in-cache', methods=['GET'])
+def check_model_in_cache():
+    '''
+    Check if model exists in huggingface cache, downloadi n background if requested
+    '''
+    data = request.args.get('model')
+    print(data)
+    model_name = data.removeprefix("textgeneration:")
+    filepath = try_to_load_from_cache(model_name, filename="pytorch_model.bin")
+    if isinstance(filepath, str):
+        response = jsonify({'status': 'success'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
+    elif filepath is _CACHED_NO_EXIST:
+        response = jsonify({'status': 'failure'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
+
 @app.route('/api/get-models-in-cache', methods=['GET'])
 def get_models_in_cache():
+    '''
+    Get all models in huggingface cache
+
+    Returns:
+        Response: json object with list of models in cache
+
+    Throws:
+        Exception: if download fails
+    '''
     models = []
     cache_list = scan_cache_dir()
     for r in cache_list.repos:
@@ -318,11 +408,25 @@ rQIDAQAB
 
 @dataclass
 class ProviderDetails:
+    '''
+    Args:
+        api_key (str): API key for provider
+        version_key (str): version key for provider
+    '''
     api_key: str
     version_key: str
 
 @dataclass
 class InferenceRequest:
+    '''
+    Args:
+        uuid (str): unique identifier for inference request
+        model_name (str): name of model to use
+        model_tag (str): tag of model to use
+        model_provider (str): provider of model to use
+        model_parameters (dict): parameters for model
+        prompt (str): prompt to use for inference
+    '''
     uuid: str
     model_name: str
     model_tag: str
@@ -332,12 +436,28 @@ class InferenceRequest:
 
 @dataclass
 class ProablityDistribution:
+    '''
+    Args:
+        log_prob_sum (float): sum of log probabilities
+        simple_prob_sum (float): sum of simple probabilities
+        tokens (dict): dictionary of tokens and their probabilities
+    '''
     log_prob_sum: float
     simple_prob_sum: float
     tokens: dict
 
 @dataclass
 class InferenceResult:
+    '''
+    Args:
+        uuid (str): unique identifier for inference request
+        model_name (str): name of model to use
+        model_tag (str): tag of model to use
+        model_provider (str): provider of model to use
+        token (str): token returned by inference
+        probability (float): probability of token
+        top_n_distribution (ProablityDistribution): top n distribution of tokens
+    '''
     uuid: str
     model_name: str
     model_tag: str
@@ -445,7 +565,10 @@ class InferenceManager:
             else:
                 infer_result.token = f"[ERROR] No response from {infer_result.model_provider } after sixty seconds"
         except ValueError as e:
-            infer_result.token = f"[ERROR] Error parsing response from API: {e}"
+            if infer_result.model_provider == "textgeneration":
+                infer_result.token = f"[ERROR] Error parsing response from local inference: {traceback.format_exc()}"
+            else:
+                infer_result.token = f"[ERROR] Error parsing response from API: {e}"
         except Exception as e:
             infer_result.token = f"[ERROR] {e}"
         finally:
@@ -646,12 +769,12 @@ class InferenceManager:
     
     def __huggingface_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         print("[Loading HF Model]")
+        print("HF API KEY", provider_details.api_key)
         response = requests.request("POST",
             f"https://api-inference.huggingface.co/models/{inference_request.model_name}",
             headers={"Authorization": f"Bearer {provider_details.api_key}"},
             json={
                 "inputs": inference_request.prompt,
-                "stream": True,
                 "parameters": {
                     "max_length": min(inference_request.model_parameters['maximum_length'], 250), # max out at 250 tokens per request, we should handle for this in client side but just in case
                     "temperature": inference_request.model_parameters['temperature'],
@@ -867,20 +990,42 @@ class InferenceManager:
     def forefront_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         self.__error_handler__(self.__forefront_text_generation__, provider_details, inference_request)
 
-    def __hosted_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
-        #wait for announcement from "llama:inference:response"
-        pubsub = GlobalState.sse_client
-        # pubsub.sse_subscribe(f"alpaca:inference:complete:{inference_request.uuid}")
+    def __local_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        cancelled = False
 
-        for message in pubsub.listen():
-            if message["type"] == "message":
-                print("Inference complete!!!")
-                pubsub.unsubscribe(f"alpaca:inference:complete:{inference_request.uuid}")
-                pubsub = None
-                break
+        hf = HFInference(inference_request.model_name)
+        output = hf.generate(
+            prompt=inference_request.prompt,
+            max_length=int(inference_request.model_parameters['maximum_length']),
+            top_p=float(inference_request.model_parameters['top_p']),
+            top_k=int(inference_request.model_parameters['top_k']),
+            temperature=float(inference_request.model_parameters['temperature']),
+            repetition_penalty=float(inference_request.model_parameters['repetition_penalty']),
+            stop_sequences=None,
+        )
 
-    def hosted_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
-       self.__error_handler__(self.__hosted_text_generation__, provider_details, inference_request)
+        infer_response = None
+        for generated_token in output:
+            if cancelled: break
+            print("generated_token", generated_token)
+            infer_response = InferenceResult(
+                    uuid=inference_request.uuid,
+                    model_name=inference_request.model_name,
+                    model_tag=inference_request.model_tag,
+                    model_provider=inference_request.model_provider,
+                    token=generated_token,
+                    probability=None,
+                    top_n_distribution=None
+                )
+        
+            if not self.announcer.announce(infer_response, event="infer"):
+                print("Cancelled inference")
+                cancelled = True
+
+    def local_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+       print("infernece_request", inference_request)
+       print("provider_details", provider_details)
+       self.__error_handler__(self.__local_text_generation__, provider_details, inference_request)
     
     def get_announcer(self):
         return self.announcer 
@@ -929,7 +1074,7 @@ class ModelManager:
         elif (provider == "cohere"):
             provider_key = "COHERE_API_KEY"
         elif (provider == "huggingface"):
-            provider_key = "HF_API_KEY"
+            provider_key = "HUGGINGFACE_API_KEY"
         elif (provider == "forefront"):
             provider_key = "FOREFRONT_API_KEY"
         else:
@@ -959,7 +1104,8 @@ class ModelManager:
             inference_request.model_name = self.get_model_attribute(f"forefront:{inference_request.model_name}", "name")
             return self.inference_manager.forefront_text_generation(provider_details, inference_request)
         elif inference_request.model_provider == "textgeneration":
-            return self.inference_manager.hosted_text_generation(provider_details, inference_request)
+            print("local text generation beginning")
+            return self.inference_manager.local_text_generation(provider_details, inference_request)
         else:
             raise Exception(f"Unknown model provider, {inference_request.model_provider}. Please add a generation function in InferenceManager or route in ModelManager.text_generation")
     

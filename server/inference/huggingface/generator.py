@@ -133,7 +133,7 @@ def greedy_search_generator(
 
         # update generated ids, model inputs, and length for next step
         input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1) # THIS IS WHERE THE NEXT OTKEN IS STORED
-        yield [next_tokens, input_ids, scores] # INTERMEIDATE TOKENS, intput_ids, scores 
+        yield next_tokens # INTERMEIDATE TOKENS, intput_ids, scores 
 
         model_kwargs = self._update_model_kwargs_for_generation(
             outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder

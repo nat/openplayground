@@ -64,7 +64,7 @@ import { toast, useToast } from "../hooks/ui/use-toast"
 const modelProviders = ["forefront", "anthropic",  "textgeneration", "huggingface", "cohere", "openai"]
 const providerToPrettyName = {
   "forefront": "Forefront",
-  "textgeneration": "Open Playground",
+  "textgeneration": "Local",
   "huggingface": "Hugging Face",
   "anthropic": "Anthropic",
   "cohere": "co:here",
@@ -391,18 +391,7 @@ export default function Playground() {
     }
     
     const fetchAvailableModels = async () => {
-      console.log("FETCHING ALL MODELS")
-      const response = await fetch(
-        ENDPOINT_URL.concat("/api/all_models"),
-        {
-          method: "GET"
-        }
-      )
-      
-
-      const json_params = await response.json()
-      console.log("json_params", json_params)
-
+      // getting selected models from local storage
       let model_keys = Object.keys(localStorage)
         .filter((key_name) => {
           if (key_name.startsWith("model_")) {
@@ -420,15 +409,6 @@ export default function Playground() {
           localStorage.getItem("model_" + modelName) || "{}"
         )
         let modelProvider = model_value.model_provider
-        // if (modelProvider === "textgeneration") {
-        //   modelProvider = "textgeneration"
-        // } else if (modelProvider === "huggingface") {
-        //   modelProvider = "huggingface"
-        // } else if (modelProvider === "cohere") {
-        //   modelProvider = "cohere"
-        // } else if (modelProvider === "openai") {
-        //   modelProvider = "openai"
-        // }
         // check to make sure its downloaded and not already in available models state
         let model_key = `${modelProvider}:${modelName}`
         if (
@@ -444,13 +424,38 @@ export default function Playground() {
 
       console.log("localstorage_model_dict", localstorage_model_dict)
 
-      const models = [];
+      console.log("available models in playground", availableModels)
+
+      console.log("FETCHING ALL MODELS")
+      // fetching all available models and their parameters
+      const all_models_response = await fetch(
+        ENDPOINT_URL.concat("/api/all_models"),
+        {
+          method: "GET"
+        }
+      )
+
+      const providers_response = await fetch(
+        ENDPOINT_URL.concat("/api/providers"),
+        {
+          method: "GET"
+        }
+      )
+
+      const all_models_params = await all_models_response.json()
+      const providers_params = await providers_response.json()
+      
+      console.log("all_models", all_models_params)
+      console.log("providers", providers_params)
+
+      const models = []
       const model_dict = {}
 
       //console.log("json_params", json_params)
       //sort alphabetically
 
-      Object.entries(json_params).forEach(([model_key, model]) => {
+      Object.entries(all_models_params).forEach(([model_key, model]) => {
+        console.warn(model_key, model)
         models.push({
           ...model,
           name: model_key,
@@ -461,27 +466,67 @@ export default function Playground() {
           }
         })
 
+        // we've also loaded in models from local storage (and they are not predefined in the json_params)
+        // look at availablemodels or localstorage_model_dict
+
         model_dict[model_key] = model["name"]
       })
 
+      if (localstorage_model_dict) {
+        console.log("localstorage_model_dict", localstorage_model_dict)
+        Object.entries(localstorage_model_dict).forEach(([model_key, model_name]) => {
+          console.log(model_key, model_name)
+          let provider = model_key.split(":")[0]
+          console.log(provider)
+          let params = providers_params[provider]
+          console.log(params)
+          if (params) {
+              console.log(params)
+                models.push({
+                parameters: params.parameters,
+                name: model_key,
+                tag:  model_key,
+                provider: provider,
+                state: {
+                  enabled: true,
+                  selected: false,
+                }
+              })
+              console.log(models)
+            }
+        })
+      }
+      console.log(models)
+      // if (availableModels) {
+      //   console.log("availableModels", availableModels)
+      //   Object.entries(availableModels).forEach(([model_key, model_name]) => {
+      //     console.warn(model_key, model_name)
+      //     let provider = model_key.split(":")[0]
+      //     let params = providers_params[provider]
+      //     models.push({
+      //       ...params.parameters,
+      //       name: model_key,
+      //       tag:  provider,
+      //       state: {
+      //         enabled: true,
+      //         selected: false,
+      //       }
+      //     })
+      //   })
+      // }
+
       console.log(models)
       console.log(model_dict)
-
-
-      console.log("available models in playground", availableModels)
-
-      
-      setAvailableModels((availableModels: any) => ({
-        ...availableModels,
-        ...localstorage_model_dict,
-      }))
-
 
       if(!settings.model_name) {
         setModel("openai:text-davinci-003")
       }
 
       // we look at available models -- (selected models, and if there are some that need to be set within models with parameters we do that (like textgeneration or huggingface remote models))
+      setAvailableModels((availableModels: any) => ({
+        ...availableModels,
+        ...localstorage_model_dict,
+      }))
 
       //console.warn("Setting setModelsWithParameters", models)
       setModelsWithParameters(models)

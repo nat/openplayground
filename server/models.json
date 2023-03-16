@@ -426,6 +426,9 @@
     },
     "huggingface": {
         "api_key": true,
+        "search": {
+            "url": "https://huggingface.co/api/quicksearch"
+        },
         "parameters": {
             "temperature": {
                 "value": 1.0,
@@ -470,6 +473,9 @@
     },
     "textgeneration": {
         "api_key": false,
+        "search": {
+            "url": "https://huggingface.co/api/quicksearch"
+        },
         "parameters": {
             "temperature": {
                 "value": 1.0,
@@ -555,9 +561,6 @@
                 }
             }
         }
-    },
-    "aleph-alpha": {
-        "api_key": true
     },
     "default": {
         "temperature": {

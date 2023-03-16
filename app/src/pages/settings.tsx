@@ -101,13 +101,13 @@ function useStoredModels() {
     modelArr.forEach((model) => {
       let store_val = JSON.stringify({
         model_provider: modelProvider,
-        available: modelProvider === "huggingface" ? false : true,
+        available: modelProvider === "textgeneration" ? false : true,
       })
       // model_ prefixed so easier to sort through localstorage
       localStorage.setItem(`model_${model}`, store_val)
     })
     // queue model download
-    if (modelProvider === "huggingface") {
+    if (modelProvider === "textgeneration") {
       modelArr.forEach((model) => {
         queueModelDownload(
           model,
@@ -149,6 +149,7 @@ function useHuggingFaceModelSearch() {
     const results = await fetch(
       `https://huggingface.co/api/quicksearch?q=${searchQuery}&type=model`
     ).then((res) => res.json())
+    console.log("results",  results.models.map((model: any) => model.id))
     setModelResults(results.models.map((model: any) => model.id))
   }
 
@@ -195,13 +196,13 @@ export default function Settings() {
     }
     preloadCacheData()
 
-    const preloadData = async () => {
+    let modelMap = {}
+    let modelProviders = []
+
+    const preloadAllModelsData = async (modelMap, modelProviders) => {
       const res = await fetch(ENDPOINT_URL.concat("/api/all_models"))
       const json_params = await res.json()
-      console.log("in settings", json_params)
-  
-      let modelMap = {}
-      let modelProviders = []
+      console.log("in settings all models", json_params)
   
       for (const [key, value] of Object.entries(json_params)) {
         if (!(modelProviders.includes(value.provider))) {
@@ -212,11 +213,36 @@ export default function Settings() {
         } 
         modelMap[value.provider].push(value.name)
       }
+
+      console.log(modelMap)
+      console.log(modelProviders)
+    }
+    preloadAllModelsData(modelMap, modelProviders)
+
+    const preloadProvidersData = async (modelMap, modelProviders) => {
+      const res = await fetch(ENDPOINT_URL.concat("/api/providers"))
+      const json_params = await res.json()
+      console.log("in settings for providers", json_params)
+
+      for (const [key, value] of Object.entries(json_params)) {
+        if (!(modelProviders.includes(key)) && key !== "default") {
+          modelProviders.push(key)
+        }
+        if (key == "textgeneration" || key == "huggingface") {
+          modelMap[key] = huggingFaceSearchResults
+        }
+      }
+
+      console.log(modelMap)
+      console.log(modelProviders)
+
       setAvailableModelMap(modelMap)
       setAllAvailableProviders(modelProviders)
       setDataLoading(false)
     }
-    preloadData()
+
+    preloadProvidersData(modelMap, modelProviders)
+
   }, [])
 
   useEffect(() => {
@@ -306,7 +332,7 @@ export default function Settings() {
       <NavBar tab="settings" />
       <div className="flex flex-col font-display flex-grow">
         <div className="lg:flex-grow grid gap-6 grid-cols-6 mx-1 lg:mx-5 flex flex-row">
-          <div className="flex col-span-6 lg:flex-col lg:col-span-1 mt-6 ">
+          <div className="flex col-span-6 lg:flex-col lg:col-span-1 mt-2">
             <h1 className="scroll-m-20 text-3xl mb-5 font-extrabold tracking-tight hidden lg:inline-block">
               Providers
             </h1>
@@ -326,13 +352,13 @@ export default function Settings() {
           </div>
           {/* RENDER MODEL BASED PAGE HERE */}
           <div className="col-span-6 lg:col-span-3 flex flex-row mx-2 lg:mx-0">
-            <div className="py-6">
+            <div className="mt-2 mb-6">
               <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight">
                 {modelProvider} Setup
               </h1>
               {/* treat model selection like a form */}
               <div className="mt-5">
-                {modelProvider != "huggingface" ? (
+                {modelProvider != "textgeneration" ? (
                   <>
                   {!dataLoading && Object.keys(modelsInformation).length != 0 ? 
                     <>
@@ -377,7 +403,7 @@ export default function Settings() {
                 ) : (
                   <></>
                 )}
-                {modelProvider === "huggingface" && (
+                {modelProvider === "textgeneration" && (
                   <p>
                     Once a model is selected, it will download in the
                     background. When ready for inference it will show in the
@@ -389,7 +415,7 @@ export default function Settings() {
                     </b>
                   </p>
                 )}
-                {modelProvider === "huggingface" && (
+                {modelProvider === "textgeneration" && (
                   <>
                   <h3 className="scroll-m-20 text-xl font-extrabold tracking-tight mt-5">
                     Downloaded Models
@@ -445,19 +471,46 @@ export default function Settings() {
                 )}
                 {(modelProvider === "textgeneration" ||
                   modelProvider === "huggingface") && (
-                  <form onSubmit={searchHuggingFaceModels}>
-                    <div className="flex w-full max-w-sm items-center space-x-2 mt-2">
-                      <Input
-                        type="text"
-                        id="model-query"
-                        placeholder="Search Query"
-                        className="flex text-left placeholder:text-left h-10 w-full rounded-md border border-slate-300 bg-transparent py-2 px-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-50 dark:focus:ring-slate-400 dark:focus:ring-offset-slate-900"
-                      />
-                      <Button type="submit">Search</Button>
-                    </div>
-                  </form>
+                  <>
+                    <form onSubmit={searchHuggingFaceModels}>
+                      <div className="flex w-full max-w-sm items-center space-x-2 mt-2">
+                        <Input
+                          type="text"
+                          id="model-query"
+                          placeholder="Search Query"
+                          className="flex text-left placeholder:text-left h-10 w-full rounded-md border border-slate-300 bg-transparent py-2 px-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-50 dark:focus:ring-slate-400 dark:focus:ring-offset-slate-900"
+                        />
+                        <Button type="submit">Search</Button>
+                      </div>
+                    </form>
+                    <form onSubmit={handleModelSubmit}>
+                      <div className="min-h-[320px] w-full border rounded-md mt-2">
+                        <div className="p-2">  
+                            {!dataLoading && huggingFaceSearchResults && huggingFaceSearchResults.map((model: any) => (
+                              <div
+                                key={model}
+                                className="rounded-md border border-slate-200 px-4 py-3 my-2 font-mono text-sm dark:border-slate-700"
+                              >
+                                {model}
+                                <Checkbox
+                                  key={model}
+                                  className="float-right"
+                                  onCheckedChange={(event) =>
+                                    handleModelSelect(model, event)
+                                  }
+                                  checked={storedModels.includes(model) && modelProvider === getModelProviderForStoredModel(model)}
+                                />
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    </form>
+                  </>
                 )}
                 {/* MODEL SELECTION AND SUBMISSION */}
+                {(modelProvider === "textgeneration" || modelProvider === "huggingface") ? 
+                  <></>
+                : (
                 <form onSubmit={handleModelSubmit}>
                   <div className="min-h-[320px] w-full border rounded-md mt-2">
                     <div className="p-2">
@@ -481,12 +534,13 @@ export default function Settings() {
                   </div>
                   {/* <Button className="float-right mt-2" type="submit" value="submit">Save Model</Button> */}
                 </form>
+                )}
               </div>
             </div>
           </div>
           {/* SELECTED MODELS */}
           <div className="col-span-6 lg:col-span-2 flex flex-row mx-2 lg:mx-0 ">
-            <div className="lg:py-6">
+            <div className="lg:mb-6 lg:mt-2">
               <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight">
                 Your Selected Models
               </h1>

@@ -61,7 +61,7 @@ export default function NavBar({ tab, children }: any) {
         <div
           className = "ml-4 cursor-pointer flex justify-end items-center self-flex-end"
           onClick={() => {
-            window.open("https://discord.gg/REgcyAfX", "_blank")
+            window.open("https://discord.gg/J8sFfUK2N2", "_blank")
           }}
           >
           <img
