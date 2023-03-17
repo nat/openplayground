@@ -1,0 +1,7 @@
+Flask==2.2.2
+Flask_Cors==3.0.10
+openai==0.26.5
+PyJWT==2.6.0
+redis==4.5.1
+requests==2.28.2
+six==1.16.0
