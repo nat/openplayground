@@ -1149,7 +1149,7 @@ def bulk_completions(tasks: List[InferenceRequest]): #lock
     #lock.release()
 
 def create_app():
-    app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)
+    #app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)
     # other setup
     return app
 
