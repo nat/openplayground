@@ -1159,4 +1159,5 @@ def cli():
 
 if __name__ == '__main__':
     # start sse before the server
+    print("RUNNING!!!")
     app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)

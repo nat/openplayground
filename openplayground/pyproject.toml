@@ -1,29 +1,33 @@
 [tool.poetry]
-name = "openplayground"
-version = "0.1.0"
+name = "alexlovesphp"
+version = "0.1.6"
 description = "test"
 authors = ["zainhuda <zainhudayyc@gmail.com>"]
 readme = "README.md"
+packages = [
+    { include = "openplayground", from = "" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-transformers = "^4.27.1"
-openai = "^0.27.2"
-cachetools = "^5.3.0"
-sseclient = "^0.0.27"
-psutil = "^5.9.4"
-torch = "^2.0.0"
-sentencepiece = "^0.1.97"
-
-[tool.poetry.group.dev.dependencies]
-openai = "^0.27.2"
-Flask = "^2.2.3"
-Flask-Cors = "^3.0.10"
-huggingface-hub = "^0.13.2"
-python-dotenv = "^1.0.0"
+transformers = "*"
+openai = "*"
+cachetools = "*"
+sseclient = "*"
+psutil = "*"
+torch = "*"
+sentencepiece = "*"
+Flask = "*"
+Flask-Cors = "*"
+huggingface-hub = "*"
+python-dotenv = "*"
 
 [tool.poetry.scripts]
-openplayground = "openplayground.app:cli"
+alexlovesphp = "openplayground.app:cli"
+
+[[tool.poetry.source]]
+name = 'pypi-public'
+url = "https://pypi.org/simple/"
 
 [build-system]
 requires = ["poetry-core"]

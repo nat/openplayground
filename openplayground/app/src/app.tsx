@@ -71,25 +71,30 @@ export default function App() {
           "Content-Type": "application/json",
           },
         })
-        const data = await res.json()
-        console.log(data)
-        let models_not_available = []
-        for (key in data) {
-          model_keys[key] = data[key] != "" ? true : false // if empty api key then not available 
-          if (!model_keys[key]) models_not_available.push(key) 
-          let APIProviderKey = "api_" + key
-          model_keys[APIProviderKey] = data[key]
-        }
-        if (models_not_available.length > 0) {
-          toast({
-            variant: "destructive",
-            title: "Some API keys aren't set up yet",
-            description: "The following model providers need API keys to use: " + models_not_available.join(", ") + ". You can set them up on the Settings page."
-          })
-        }
-        // set api key available or not state
-        console.log("model keys", model_keys)
-        setModelsInformation(model_keys)
+      const data = await res.json()
+      console.log("yo!!")
+      console.log(data)
+      console.log("hiiii!")
+      // the issue is here, something goes wrong here? 
+      let models_not_available = []
+      for (key in data) {
+        console.log(key, data[key])
+        model_keys[key] = data[key] != "" ? true : false // if empty api key then not available 
+        if (!model_keys[key]) models_not_available.push(key) 
+        let APIProviderKey = "api_" + key
+        model_keys[APIProviderKey] = data[key]
+      }
+      if (models_not_available.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Some API keys aren't set up yet",
+          description: "The following model providers need API keys to use: " + models_not_available.join(", ") + ". You can set them up on the Settings page."
+        })
+      }
+      console.log(models_not_available)
+      // set api key available or not state
+      console.log("model keys", model_keys)
+      setModelsInformation(model_keys)
     }
     preloadData(model_keys)
   }, [])
