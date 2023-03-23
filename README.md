@@ -5,10 +5,10 @@ An open source LLM playground that you can run on your laptop
 > screenshot <
 
 Features:
-- Use any model from OpenAI, Anthropic, Cohere, Forefront, HuggingFace, Aleph Alpha
-- Automatically detects local models in your HuggingFace cache
+- Use any model from OpenAI, Anthropic, Cohere, Forefront, HuggingFace, Aleph Alpha, llama.cpp
 - Full playground UI, including history, parameter tuning, keyboard shortcuts, logprops
 - Compare screen where you run run test models against the same prompt simultaneously, individually tune model parameters, the try same model multiple times with different paramaters
+- Automatically detects local models in your HuggingFace cache, lets you install new ones
 - Works ok on phone
 - Probably won't kill everyone
 
