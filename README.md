@@ -31,6 +31,15 @@ Try the free hosted version: [nat.dev](https://nat.dev).
 % sh run.sh
 ```
 
+## How to setup for continuous development
+```
+% git clone https://github.com/nat/openplayground
+% cd app && parcel watch src/index.html --no-cache
+% cd server && flask run --debug -p $PORT
+```
+
+
+
 ## Ideas for contributions
 
 - Add tests 😅
