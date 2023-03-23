@@ -1,6 +1,6 @@
 # openplayground
 
-An open source LLM playground that you can run on your laptop
+An LLM playground you can run on your laptop
 
 INSERT VIDEO
 
