@@ -23,22 +23,12 @@ Try the free hosted version: [nat.dev](https://nat.dev).
 % openplayground run
 ```
 
-## How to run from source
-
-```
-% git clone https://github.com/nat/openplayground
-% sh build.sh
-% sh run.sh
-```
-
-## How to setup for continuous development
+## How to run for development
 ```
 % git clone https://github.com/nat/openplayground
 % cd app && parcel watch src/index.html --no-cache
 % cd server && flask run --debug -p $PORT
 ```
-
-
 
 ## Ideas for contributions
 
