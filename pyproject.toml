@@ -1,11 +1,11 @@
 [tool.poetry]
 name = "alexlovesphp"
-version = "0.1.6"
+version = "0.1.7a1"
 description = "test"
 authors = ["zainhuda <zainhudayyc@gmail.com>"]
 readme = "README.md"
 packages = [
-    { include = "openplayground", from = "" },
+    { include = "server", from = "" },
 ]
 
 [tool.poetry.dependencies]
@@ -23,7 +23,7 @@ huggingface-hub = "*"
 python-dotenv = "*"
 
 [tool.poetry.scripts]
-alexlovesphp = "openplayground.app:cli"
+alexlovesphp = "server.app:cli"
 
 [[tool.poetry.source]]
 name = 'pypi-public'

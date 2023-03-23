@@ -1,11 +1,9 @@
 # coding=utf-8
-# credits to https://github.com/singingwolfboy/flask-sse
-# Modified by Alex to support TLS
+# credit to https://github.com/singingwolfboy/flask-sse
 from __future__ import unicode_literals
 
-import openplayground.sseserver as sse_server
+from . import sseserver as sse_server
 from collections import OrderedDict
-import multiprocessing
 from flask import Blueprint, request, current_app, json, stream_with_context
 import six
 import json

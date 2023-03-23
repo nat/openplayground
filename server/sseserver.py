@@ -1,6 +1,4 @@
 # Thread Safe and Singular Global Instance of SSE Server
-import multiprocessing
-from multiprocessing.managers import BaseManager
 import queue
 
 # what if we just kept a SSEQueue for each topic
@@ -20,7 +18,6 @@ class SSEQueue:
         self.listeners.append(q)
         return q
 
-    # is this just a publish? appropriate channel?
     def announce(self, message: str):
         print("annnouncing from queue", message, self.listeners)
         for i in reversed(range(len(self.listeners))):
@@ -57,61 +54,3 @@ class SSEQueueWithTopic:
         print("UNSUBSCRIBING FROM:", channel)
         if channel in self.pubsub:
             del self.pubsub[channel]
-
-'''
-have maps of SSEQueues for each topic
-
-'''
-
-# class SSEManager(BaseManager):
-# 	pass
-
-# def start_sse():
-#     lock = multiprocessing.Lock()
-#     pubsub = {}
-#     sse = SSEQueue()
-	
-#     def sse_listen(channel: str):
-#         print("Listening to", channel)
-#         if channel not in pubsub:
-#             raise ValueError(f"Channel {channel} not found")
-#         with lock:
-#             return pubsub[channel].listen()
-
-#     def sse_publish(channel: str, message: str):
-#         print("Publishing to", channel, message)
-#         with lock:
-#             pubsub[channel].announce(message=message)
-    
-#     def sse_subscribe(channel: str):
-#         print("Subscribing to", channel)
-#         with lock:
-#             if channel not in pubsub:
-#                 pubsub[channel] = SSEQueue()
-#             return pubsub[channel]
-
-#     def sse_unsubscribe(channel: str):
-#         print("Unsubscribing from", channel)
-#         with lock:
-#             if channel in pubsub:
-#                 del pubsub[channel]
-		    
-#     SSEManager.register("sse_listen", sse_listen)
-#     SSEManager.register("sse_publish", sse_publish)
-#     SSEManager.register("sse_subscribe", sse_subscribe)
-#     SSEManager.register("sse_unsubscribe", sse_unsubscribe)
-    
-#     manager = SSEManager(address=("127.0.0.1", 9001), authkey=b'sse')
-#     server = manager.get_server()
-#     server.serve_forever()
-
-# def import_sse():
-#     SSEManager.register("sse_listen")
-#     SSEManager.register("sse_publish")
-#     SSEManager.register("sse_subscribe")
-#     SSEManager.register("sse_unsubscribe")
-
-# if __name__ == "__main__":
-#     start_sse()
-# else:
-# 	import_sse() 

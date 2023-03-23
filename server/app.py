@@ -1,33 +1,32 @@
-import json
-import os
-import time
 import cachetools
-import requests
-import sseclient
-from openplayground.sse import Message
-from openplayground.sseserver import SSEQueueWithTopic, SSEQueue
-from openplayground.inference.huggingface.hf import HFInference
-import traceback
-import queue
+import click
+import importlib.resources as pkg_resources
+import json
 import math
 import openai
-import uuid
+import os
+import requests
+import sseclient
+import time
+import traceback
 import urllib
 import warnings
 
-import click
+from .inference.huggingface.hf import HFInference
+from .sse import Message
+from .sseserver import SSEQueue
+
 from datetime import datetime
 from dataclasses import dataclass
-from dotenv import load_dotenv, set_key, unset_key, find_dotenv
+from dotenv import load_dotenv, set_key, find_dotenv
 from typing import Callable, List, Union
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, request, jsonify, Response, abort, send_from_directory, stream_with_context
+from flask import Flask, request, jsonify, Response, send_from_directory, stream_with_context
 from flask.cli import FlaskGroup
 from flask_cors import CORS
 from huggingface_hub import hf_hub_download, try_to_load_from_cache, scan_cache_dir, _CACHED_NO_EXIST
-import importlib.resources as pkg_resources
-
 from transformers import T5Tokenizer
+
 google_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-xl")
 
 # Monkey patching for warnings, for convenience
@@ -56,23 +55,12 @@ def serve(path):
     if path == "" or not os.path.exists(app.static_folder + '/' + path):
         path = 'index.html'
 
-    #if 'br' in request.headers.get('Accept-Encoding', ''):
-    #    path = path + '.br'
-    #elif 'gzip' in request.headers.get('Accept-Encoding', ''):
-    #    path = path + '.gz'
-        
     return send_from_directory(app.static_folder, path)
-
-# Testing route
-@app.route('/hello')
-def hello():
-    return "Hello World!"
 
 @app.route("/api/listen", methods=["POST", "OPTIONS"])
 def listen():
     global SSE_MANAGER
-    #print("request in stream", request.data)
-    uuid = "1" # this is sent upon connection from the frontend
+    uuid = "1"
     print("Streaming SSE", uuid)
 
     @stream_with_context
@@ -92,9 +80,6 @@ def listen():
             print("SSE Terminated")
             SSE_MANAGER.announce(message=json.dumps({"uuid": uuid}))
             print("GeneratorExit")
-        finally:
-            #close and clean up redis connection
-            pass
 
     return Response(stream_with_context(generator()), mimetype='text/event-stream')
 
@@ -116,9 +101,7 @@ def stream_inference():
         return create_response_message("Invalid request", 400)
     
     request_uuid = "1"
-    # request.data = json.dumps({"uuid": request_uuid})
-    
-    models_json = json.load(pkg_resources.open_text("openplayground", 'models.json'))
+    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
 
     prompt = data['prompt']
     models = data['models']
@@ -194,7 +177,7 @@ def stream_inference():
 @app.route('/api/all_models', methods=['GET'])
 def all_models():
     print("recieved request for all models")
-    models_json = json.load(pkg_resources.open_text("openplayground", 'models.json'))
+    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
     providers = models_json.keys()
     models_by_provider = {}
     for provider in providers:
@@ -257,7 +240,7 @@ def providers():
             }
         }
     '''
-    models_json = json.load(pkg_resources.open_text("openplayground", 'models.json'))
+    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
     providers = models_json.keys()
     info_by_provider = {}
 
@@ -301,8 +284,7 @@ def check_key_store():
     Model must have "api_key" field set to true in models.json, otherwise "None" is returned
     Keys are stored in .env in {PROVIDER}_API_KEY format
     '''
-    models_json = json.load(pkg_resources.open_text("openplayground", 'models.json'))
-    # for i, model_promodels_json.keys()
+    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
 
     response = {}
     for provider in models_json.keys():
@@ -312,15 +294,12 @@ def check_key_store():
             provider_key = provider.upper() + "_API_KEY"
 
         if models_json[provider]["api_key"] == False:
-            # return empty if key not needed
             warnings.warn("warning: no API key needed for provider " + provider)
             response[provider] = "None"
         elif os.environ.get(provider_key) is None:
             warnings.warn("warning: no API key found for provider " + provider)
-            # return empty is key not found
             response[provider] = ""
         else:
-            # return key
             response[provider] = os.environ.get(provider_key)
 
     response = jsonify(response)
@@ -399,17 +378,6 @@ def download_model(model_name: str):
     return True
 
 CORS(app)
-
-public_key = b""""
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlLX6VS+hjfsckusKCoMg
-3op6g5EAfHPohyBsAoSS1GcvpJZLKacKNEW5SHpvPs9WGFfmAeJwbK6HfIkvrbOX
-B/3MxxTBsD/c5HA2WTONPr797Q7O2m1pMzC7acqad2iBWM+50+56wDgxyHd20wOE
-g9kTW2IvscXQUHdAIqdqKVWsMfyfERDy12dN/vp7AICZjlyT38idib1bQgylKTl1
-APgZgVqnE0IM0ER6luNFzWMSjZ3CpJNx0UTiLW3H/DLFfvxfzOIqYLEm3ylGxGHB
-/Kndhq8/yjNG2YJPALGR8p11+MEgdt4osDZrdgUDDKxDimhq+WPN8leKxVg9TPF/
-rQIDAQAB
------END PUBLIC KEY-----"""
 
 @dataclass
 class ProviderDetails:
@@ -595,14 +563,11 @@ class InferenceManager:
             temperature=inference_request.model_parameters['temperature'],
             max_tokens=inference_request.model_parameters['maximum_length'],
             top_p=inference_request.model_parameters['top_p'],
-            #stop=inference_request.model_parameters['stop_sequences'],
             frequency_penalty=inference_request.model_parameters['frequency_penalty'],
             presence_penalty=inference_request.model_parameters['presence_penalty'],
             stream=True
         )
 
-        total_tokens = 0
-        tokens = ""
         cancelled = False
 
         for event in response:
@@ -615,7 +580,6 @@ class InferenceManager:
             if not "content" in delta:
                 continue
             generated_token = delta["content"]
-            tokens += generated_token
 
             infer_response = InferenceResult(
                 uuid=inference_request.uuid,
@@ -632,9 +596,6 @@ class InferenceManager:
             if not self.announcer.announce(infer_response, event="infer"):
                 print("Cancelled inference")
                 cancelled = True
-            
-
-        #print("Final tokens", tokens)
 
     def __openai_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         openai.api_key = provider_details.api_key
@@ -677,14 +638,12 @@ class InferenceManager:
   
                     prob_dist.simple_prob_sum += simple_prob
                 
-                
                 prob_dist.tokens = dict(
                     sorted(prob_dist.tokens.items(), key=lambda item: item[1][0], reverse=True)
                 )
                 prob_dist.log_prob_sum = chosen_log_prob
                 prob_dist.simple_prob_sum = round(prob_dist.simple_prob_sum, 2)
              
-                #print("prob_dist", prob_dist)
                 tokens += generated_token
                 infer_response = InferenceResult(
                     uuid=inference_request.uuid,
@@ -696,7 +655,6 @@ class InferenceManager:
                     top_n_distribution=prob_dist
                 )
             except IndexError:
-                #print("IndexError", event)
                 infer_response = InferenceResult(
                     uuid=inference_request.uuid,
                     model_name=inference_request.model_name,
@@ -712,8 +670,6 @@ class InferenceManager:
             if not self.announcer.announce(infer_response, event="infer"):
                 print("Cancelled inference")
                 cancelled = True
-        
-        #print("Final tokens", tokens)
 
     def openai_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         if inference_request.model_name == "gpt-3.5-turbo":
@@ -752,8 +708,6 @@ class InferenceManager:
             for token in response.iter_lines():
                 token = token.decode('utf-8')
                 token_json = json.loads(token)
-                # print("TOKEN JSON", token_json)
-                #print("token_json", token_json)
                 total_tokens += 1
                 if cancelled: continue
 
@@ -795,10 +749,7 @@ class InferenceManager:
             timeout=60
         )
 
-        #print response content-type
         content_type = response.headers["content-type"]
-        print("content_type", content_type)
-        #check if 200
         total_tokens = 0
         cancelled = False
 
@@ -806,13 +757,11 @@ class InferenceManager:
             raise Exception(f"Request failed: {response.status_code} {response.reason}")
 
         if content_type == "application/json":
-            #print("response", response.status_code, response.reason)
             return_data = json.loads(response.content.decode("utf-8"))
             outputs = return_data[0]["generated_text"]
             outputs = outputs.removeprefix(inference_request.prompt)
             print("[Got HF Model output]")
 
-            #for word in [outputs[i:i+4] for i in range(0, len(outputs), 4)]:
             self.announcer.announce(InferenceResult(
                 uuid=inference_request.uuid,
                 model_name=inference_request.model_name,
@@ -908,7 +857,6 @@ class InferenceManager:
             cancelled = False
             total_tokens = 0
             aggregate_string_length = 0
-            full_completion = ""
 
             for packet in sseclient.SSEClient(response).events():
                 generated_token = None
@@ -916,7 +864,6 @@ class InferenceManager:
                 prob_dist = None
 
                 if packet.event == "update":
-                    full_completion = packet.data
                     packet.data = urllib.parse.unquote(packet.data)
                     generated_token = packet.data[aggregate_string_length:]
                     aggregate_string_length = len(packet.data)
@@ -933,18 +880,14 @@ class InferenceManager:
                         print("Cancelled inference")
                         cancelled = True
                 elif packet.event == "message":
-                    #print("message", packet.data)
                     data = json.loads(packet.data)
 
                     logprobs = data["logprobs"][0]
                     tokens = logprobs["tokens"]
                     token_logprobs = logprobs["token_logprobs"]
 
-                    #print(f"Tokens: {len(tokens)}, Total: {total_tokens} ")
                     new_tokens = tokens[total_tokens:]
 
-                    #print("Old Tokens", tokens[:total_tokens])
-                    #print("New Tokens", tokens[total_tokens:])
                     for index, new_token in enumerate(new_tokens):
                         generated_token = new_token
             
@@ -1040,10 +983,9 @@ class ModelManager:
         self.sse_client = sse_client
         self.local_cache = {}
         self.inference_manager = InferenceManager(sse_client)
-        self.models_json = json.load(pkg_resources.open_text("openplayground", 'models.json'))
+        self.models_json = json.load(pkg_resources.open_text("server", 'models.json'))
 
     def get_available_models(self):
-        # model provider --> model map
         provider_model_map = {}
         for providers in self.models_json:
             if "models" in self.models_json[providers]:
@@ -1068,10 +1010,8 @@ class ModelManager:
     
     def get_model_attribute(self, model_name: str, attribute: str):
         return {}
-        #return self.redis_client.hget(f"model:{model_name}", attribute)
 
     def get_provider_key(self, provider: str):
-        # TODO: abstract to just one function its duplicated
         provider_key = ""
         provider_value = ""
         if (provider == "openai"):
@@ -1085,10 +1025,8 @@ class ModelManager:
         else:
             provider_key = "UNKNOWN_API_KEY"
         if os.environ.get(provider_key) is None:
-            # return empty is key not found
             provider_value = ""
         else:
-            # return key if found
             provider_value = os.getenv(provider_key)
         return provider_value
     
@@ -1121,8 +1059,8 @@ class GlobalState:
     model_manager = ModelManager(SSE_MANAGER)
     sse_client = SSE_MANAGER
 
-def bulk_completions(tasks: List[InferenceRequest]): #lock
-    time.sleep(1) # enough time for the SSE to establish connection, we don't want to drop any tokens
+def bulk_completions(tasks: List[InferenceRequest]):
+    time.sleep(1)
 
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
         futures = []
@@ -1130,11 +1068,8 @@ def bulk_completions(tasks: List[InferenceRequest]): #lock
             print("sending inference request:", inference_request.model_provider)
             futures.append(executor.submit(GlobalState.model_manager.text_generation, inference_request))
 
-        results = [future.result() for future in futures]
+        [future.result() for future in futures]
         
-    # completion_greenlets = [gevent.spawn(GlobalState.model_manager.text_generation, inference_request) for inference_request in tasks]
-    # gevent.joinall(completion_greenlets)
-
     GlobalState.model_manager.get_announcer().announce(InferenceResult(
         uuid=tasks[0].uuid,
         model_name=None,
@@ -1145,12 +1080,8 @@ def bulk_completions(tasks: List[InferenceRequest]): #lock
         top_n_distribution=None
     ), event="done")
 
-    #print("All done, releasing lock?")
-    #lock.release()
-
 def create_app():
-    #app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)
-    # other setup
+    app.config['PORT'] = 1235
     return app
 
 @click.group(cls=FlaskGroup, create_app=create_app)
@@ -1158,6 +1089,5 @@ def cli():
     pass
 
 if __name__ == '__main__':
-    # start sse before the server
     print("RUNNING!!!")
     app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)
