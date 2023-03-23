@@ -2,7 +2,7 @@
 
 An open source LLM playground that you can run on your laptop
 
-> screenshot <
+INSERT VIDEO
 
 Features:
 - Use any model from OpenAI, Anthropic, Cohere, Forefront, HuggingFace, Aleph Alpha, llama.cpp
