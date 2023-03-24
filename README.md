@@ -36,7 +36,9 @@ $ cd server && pip3 install -r requirements.txt && python app.py
 
 ## Ideas for contributions
 
-- Add tests 😅
+- Add a token counter to the playground
+- Add a cost counter to the playground and the compare page
+- Measure and display time to first token
 - Setup automatic builds with GitHub Actions
 - The default parameters for each model are configured in the `server/models.json` file. If you find better default parameters for a model, please submit a pull request!
 - Someone can help us make a homebrew package, and a dockerfile
