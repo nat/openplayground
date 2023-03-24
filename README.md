@@ -62,20 +62,20 @@ You can add models in `server/models.json` with the following schema:
 For models running locally on your device you can add them to openplayground like the following (a minimal example):
 ```json
 "llama": {
-        "api_key" : false,
-        "models" : {
-            "llama-70b": {
-                "parameters": {
-                    "temperature": {
-                        "value": 0.5,
-                        "range": [
-                            0.1,
-                            1.0
-                        ]
-                    },
-                }
+    "api_key" : false,
+    "models" : {
+        "llama-70b": {
+            "parameters": {
+                "temperature": {
+                    "value": 0.5,
+                    "range": [
+                        0.1,
+                        1.0
+                    ]
+                },
             }
         }
+    }
 }
 ```
 
@@ -86,20 +86,20 @@ Keep in mind you will need to add a generation method for your model in `server/
 This is for model providers like OpenAI, cohere, forefront, and more. You can connect them easily into openplayground (a minimal example):
 ```json
 "cohere": {
-        "api_key" : true,
-        "models" : {
-            "xlarge": {
-                "parameters": {
-                    "temperature": {
-                        "value": 0.5,
-                        "range": [
-                            0.1,
-                            1.0
-                        ]
-                    },
-                }
+    "api_key" : true,
+    "models" : {
+        "xlarge": {
+            "parameters": {
+                "temperature": {
+                    "value": 0.5,
+                    "range": [
+                        0.1,
+                        1.0
+                    ]
+                },
             }
         }
+    }
 }
 ```
 
@@ -111,18 +111,18 @@ We use this for Huggingface Remote Inference models, the search endpoint is usef
 
 ```json
 "provider_name": {
-        "api_key": true,
-        "search": {
-            "endpoint": "ENDPOINT_URL"
+    "api_key": true,
+    "search": {
+        "endpoint": "ENDPOINT_URL"
+    },
+    "parameters": {
+        "parameter": {
+            "value": 1.0,
+            "range": [
+                0.1,
+                1.0
+            ]
         },
-        "parameters": {
-            "parameter": {
-                "value": 1.0,
-                "range": [
-                    0.1,
-                    1.0
-                ]
-            },
-        }
+    }
 }
 ```
