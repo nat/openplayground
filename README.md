@@ -124,6 +124,3 @@ We use this for Huggingface Remote Inference models, the search endpoint is usef
         }
 }
 ```
-
-## Credits
-
