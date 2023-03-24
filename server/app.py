@@ -1,3 +1,4 @@
+import anthropic
 import cachetools
 import click
 import importlib.resources as pkg_resources
@@ -7,18 +8,21 @@ import openai
 import os
 import requests
 import sseclient
+import threading
 import time
 import traceback
 import urllib
 import warnings
+import sentencepiece as spm
 
 from .inference.huggingface.hf import HFInference
 from .sse import Message
 from .sseserver import SSEQueue
 
+from aleph_alpha_client import Client as aleph_client, CompletionRequest, Prompt
 from datetime import datetime
 from dataclasses import dataclass
-from dotenv import load_dotenv, set_key, find_dotenv
+from dotenv import load_dotenv, set_key
 from typing import Callable, List, Union
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, Response, send_from_directory, stream_with_context
@@ -35,19 +39,22 @@ def warning_on_one_line(message, category, filename, lineno, file=None, line=Non
 
 warnings.formatwarning = warning_on_one_line
 
-# Setting up .env file for API keys
-DOTENV_FILE = find_dotenv()
-if not DOTENV_FILE:
-    warnings.warn("No .env file found, using default environment variables, creating one locally")
-    f = open(".env", "w")
-    f.close()
-    DOTENV_FILE = find_dotenv()
-load_dotenv(override=True)
-
-# global sse server manager
+# global variables
+DOTENV_FILE_PATH = None
+MODELS_JSON = None
 SSE_MANAGER = SSEQueue()
 
-app = Flask(__name__, static_folder='./static')
+def write_to_env(key: str, value: str) -> None:
+    '''
+    Writes a key-value pair to the .env file
+    '''
+    global DOTENV_FILE_PATH
+    if not os.path.exists(DOTENV_FILE_PATH):
+        open(DOTENV_FILE_PATH, 'a').close()
+
+    set_key(DOTENV_FILE_PATH, key, value)
+
+app = Flask(__name__, static_folder='../app/dist')
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -56,32 +63,6 @@ def serve(path):
         path = 'index.html'
 
     return send_from_directory(app.static_folder, path)
-
-@app.route("/api/listen", methods=["POST", "OPTIONS"])
-def listen():
-    global SSE_MANAGER
-    uuid = "1"
-    print("Streaming SSE", uuid)
-
-    @stream_with_context
-    def generator():
-        messages = SSE_MANAGER.listen()
-        print("genertor queue", messages)
-        try:
-            while True:
-                message = messages.get()
-                message = json.loads(message)
-                if message["type"] == "done":
-                    print("Done streaming SSE")
-                    break
-                print("YIELDING message", str(Message(**message)))
-                yield str(Message(**message))
-        except GeneratorExit:
-            print("SSE Terminated")
-            SSE_MANAGER.announce(message=json.dumps({"uuid": uuid}))
-            print("GeneratorExit")
-
-    return Response(stream_with_context(generator()), mimetype='text/event-stream')
 
 def create_response_message(message: str, status_code: int) -> Response:
     response = jsonify({'status': message})
@@ -101,11 +82,10 @@ def stream_inference():
         return create_response_message("Invalid request", 400)
     
     request_uuid = "1"
-    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
 
     prompt = data['prompt']
     models = data['models']
-    providers = models_json.keys()
+    providers = MODELS_JSON.keys()
 
     all_tasks = []
     models_name_provider = []
@@ -128,22 +108,25 @@ def stream_inference():
         sanitized_params = {}
         if provider == "openai":
             name = name.removeprefix("openai:")
-            required_parameters = ["temperature", "top_p", "maximum_length", "stop_sequences", "frequency_penalty", "presence_penalty", "stop_sequences"]
+            required_parameters = ["temperature", "topP", "maximumLength", "stopSequences", "frequencyPenalty", "presencePenalty", "stopSequences"]
         elif provider == "cohere":
             name = name.removeprefix("cohere:")
-            required_parameters = ["temperature", "top_p", "top_k", "maximum_length", "presence_penalty", "frequency_penalty", "stop_sequences"]
+            required_parameters = ["temperature", "topP", "topK", "maximumLength", "presencePenalty", "frequencyPenalty", "stopSequences"]
         elif provider == "huggingface":
             name = name.removeprefix("huggingface:")
-            required_parameters = ["temperature", "top_p", "top_k", "repetition_penalty", "maximum_length", "stop_sequences"]
+            required_parameters = ["temperature", "topP", "topK", "repetitionPenalty", "maximumLength", "stopSequences"]
         elif provider == "forefront":
             name = name.removeprefix("forefront:")
-            required_parameters = ["temperature", "top_p", "top_k", "repetition_penalty", "maximum_length", "stop_sequences"]
+            required_parameters = ["temperature", "topP", "topK", "repetitionPenalty", "maximumLength", "stopSequences"]
         elif provider == "textgeneration":
             name = name.removeprefix("textgeneration:")
-            required_parameters = ["temperature", "top_p",  "top_k", "repetition_penalty", "maximum_length"]
+            required_parameters = ["temperature", "topP",  "topK", "repetitionPenalty", "maximumLength"]
         elif provider == "anthropic":
             name = name.removeprefix("anthropic:")
-            required_parameters = ["temperature", "top_p",  "top_k", "maximum_length", "stop_sequences"]
+            required_parameters = ["temperature", "topP",  "topK", "maximumLength", "stopSequences"]
+        elif provider == "aleph-alpha":
+            name = name.removeprefix("aleph-alpha:")
+            required_parameters = ["temperature", "topP",  "topK", "maximumLength", "repetitionPenalty", "stopSequences"]
         else:
             raise ValueError(f"Invalid provider: {provider}, please define a valid parameters for this provider")
 
@@ -151,11 +134,11 @@ def stream_inference():
             if param not in parameters:
                 return create_response_message(f"Missing required parameter: {name} - {provider} - {param}", 400)
 
-            if param == "stop_sequences":
+            if param == "stopSequences":
                 if parameters[param] is None:
                     parameters[param] = []
                 if (not isinstance(parameters[param], list) and not parameters[param] == None):
-                    return create_response_message(f"Invalid stop_sequences parameter", 400)
+                    return create_response_message(f"Invalid stopSequences parameter", 400)
             elif not isinstance(parameters[param], (int, float)) and not (isinstance(parameters[param], str) and parameters[param].replace('.', '').isdigit()):
                 return create_response_message(f"Invalid parameter: {param} - {name}", 400)
             
@@ -165,20 +148,39 @@ def stream_inference():
             uuid=request_uuid, model_name=name, model_tag=tag, model_provider=provider,
             model_parameters=sanitized_params, prompt=prompt)
         )
-        print("all tasks: ", all_tasks)
+    
+    global SSE_MANAGER
+    uuid = "1"
+    print("Streaming SSE", uuid)
 
-    if len(all_tasks) > 0:
-        bulk_completions(all_tasks)
-        return create_response_message(message="success", status_code=200)
-    else:
-        print("sending response back")
-        return create_response_message("I see you", 500)
+    if len(all_tasks) == 0:
+        return create_response_message("Invalid Request", 400)
+    
+    thread = threading.Thread(target=bulk_completions, args=(all_tasks,))
+    thread.start()
+
+    @stream_with_context
+    def generator():
+        messages = SSE_MANAGER.listen()
+        try:
+            while True:
+                message = messages.get()
+                message = json.loads(message)
+                if message["type"] == "done":
+                    print("Done streaming SSE")
+                    break
+                print("YIELDING message", str(Message(**message)))
+                yield str(Message(**message))
+        except GeneratorExit:
+            print("SSE Terminated")
+            SSE_MANAGER.announce(message=json.dumps({"uuid": uuid}))
+            print("GeneratorExit")
+
+    return Response(stream_with_context(generator()), mimetype='text/event-stream')
 
 @app.route('/api/all_models', methods=['GET'])
 def all_models():
-    print("recieved request for all models")
-    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
-    providers = models_json.keys()
+    providers = MODELS_JSON.keys()
     models_by_provider = {}
     for provider in providers:
         models_by_provider[provider] = []
@@ -240,13 +242,12 @@ def providers():
             }
         }
     '''
-    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
-    providers = models_json.keys()
+    providers = MODELS_JSON.keys()
     info_by_provider = {}
 
     for provider in providers:
-        if "models" not in models_json[provider]:
-            info_by_provider[provider] = models_json[provider]
+        if "models" not in MODELS_JSON[provider]:
+            info_by_provider[provider] = MODELS_JSON[provider]
 
     response = app.response_class(
         response=json.dumps(info_by_provider),
@@ -269,9 +270,9 @@ def store_api_key():
     model_provider = data['model_provider'].upper()
     model_provider_value = data['api_key']
     provider_key = model_provider + "_API_KEY"
-   
-    set_key(DOTENV_FILE, provider_key, model_provider_value)
-    load_dotenv(override=True) # reload .env file
+    
+    write_to_env(provider_key, model_provider_value)
+    load_dotenv(DOTENV_FILE_PATH, override=True) # reload .env file
 
     response = jsonify({'status': 'success'})
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -284,16 +285,14 @@ def check_key_store():
     Model must have "api_key" field set to true in models.json, otherwise "None" is returned
     Keys are stored in .env in {PROVIDER}_API_KEY format
     '''
-    models_json = json.load(pkg_resources.open_text("server", 'models.json'))
-
     response = {}
-    for provider in models_json.keys():
+    for provider in MODELS_JSON.keys():
         if (provider == "default"): 
             continue
         else:
             provider_key = provider.upper() + "_API_KEY"
 
-        if models_json[provider]["api_key"] == False:
+        if MODELS_JSON[provider]["api_key"] == False:
             warnings.warn("warning: no API key needed for provider " + provider)
             response[provider] = "None"
         elif os.environ.get(provider_key) is None:
@@ -450,17 +449,18 @@ class InferenceAnnouncer:
         print("formatting message")
         encoded = {
             "message": infer_result.token,
-            "model_name": infer_result.model_name,
-            "model_tag": infer_result.model_tag,
+            "modelName": infer_result.model_name,
+            "modelTag": infer_result.model_tag,
+            "modelProvider": infer_result.model_provider,
         }
 
         if infer_result.probability is not None:
             encoded["prob"] = round(math.exp(infer_result.probability) * 100, 2) 
 
         if infer_result.top_n_distribution is not None:
-            encoded["top_n_distribution"] = {
-                "log_prob_sum": infer_result.top_n_distribution.log_prob_sum,
-                "simple_prob_sum": infer_result.top_n_distribution.simple_prob_sum,
+            encoded["topDistribution"] = {
+                "logProbSum": infer_result.top_n_distribution.log_prob_sum,
+                "simpleProbSum": infer_result.top_n_distribution.simple_prob_sum,
                 "tokens": infer_result.top_n_distribution.tokens
             }
 
@@ -561,10 +561,10 @@ class InferenceManager:
                 {"role": "user", "content": inference_request.prompt},
             ],
             temperature=inference_request.model_parameters['temperature'],
-            max_tokens=inference_request.model_parameters['maximum_length'],
-            top_p=inference_request.model_parameters['top_p'],
-            frequency_penalty=inference_request.model_parameters['frequency_penalty'],
-            presence_penalty=inference_request.model_parameters['presence_penalty'],
+            max_tokens=inference_request.model_parameters['maximumLength'],
+            top_p=inference_request.model_parameters['topP'],
+            frequency_penalty=inference_request.model_parameters['frequencyPenalty'],
+            presence_penalty=inference_request.model_parameters['presencePenalty'],
             stream=True
         )
 
@@ -604,16 +604,14 @@ class InferenceManager:
             model=inference_request.model_name,
             prompt=inference_request.prompt,
             temperature=inference_request.model_parameters['temperature'],
-            max_tokens=inference_request.model_parameters['maximum_length'],
-            top_p=inference_request.model_parameters['top_p'],
-            stop=None if len(inference_request.model_parameters['stop_sequences']) == 0 else inference_request.model_parameters['stop_sequences'],
-            frequency_penalty=inference_request.model_parameters['frequency_penalty'],
-            presence_penalty=inference_request.model_parameters['presence_penalty'],
+            max_tokens=inference_request.model_parameters['maximumLength'],
+            top_p=inference_request.model_parameters['topP'],
+            stop=None if len(inference_request.model_parameters['stopSequences']) == 0 else inference_request.model_parameters['stopSequences'],
+            frequency_penalty=inference_request.model_parameters['frequencyPenalty'],
+            presence_penalty=inference_request.model_parameters['presencePenalty'],
             logprobs=5,
             stream=True
         )
-        total_tokens = 0
-        tokens = ""
         cancelled = False
 
         for event in response:
@@ -626,8 +624,6 @@ class InferenceManager:
                 prob_dist = ProablityDistribution(
                     log_prob_sum=0, simple_prob_sum=0, tokens={},
                 )
-
-                total_tokens += 1
 
                 for token, log_prob in likelihood.items():
                     simple_prob = round(math.exp(log_prob) * 100, 2)
@@ -644,7 +640,6 @@ class InferenceManager:
                 prob_dist.log_prob_sum = chosen_log_prob
                 prob_dist.simple_prob_sum = round(prob_dist.simple_prob_sum, 2)
              
-                tokens += generated_token
                 infer_response = InferenceResult(
                     uuid=inference_request.uuid,
                     model_name=inference_request.model_name,
@@ -688,13 +683,13 @@ class InferenceManager:
                 "prompt": inference_request.prompt,
                 "model": inference_request.model_name,
                 "temperature": float(inference_request.model_parameters['temperature']),
-                "p": float(inference_request.model_parameters['top_p']),
-                "k": int(inference_request.model_parameters['top_k']),
-                "stop_sequences": inference_request.model_parameters['stop_sequences'],
-                "frequency_penalty": float(inference_request.model_parameters['frequency_penalty']),
-                "presence_penalty": float(inference_request.model_parameters['presence_penalty']),
+                "p": float(inference_request.model_parameters['topP']),
+                "k": int(inference_request.model_parameters['topK']),
+                "stopSequences": inference_request.model_parameters['stopSequences'],
+                "frequencyPenalty": float(inference_request.model_parameters['frequencyPenalty']),
+                "presencePenalty": float(inference_request.model_parameters['presencePenalty']),
                 "return_likelihoods": "GENERATION",
-                "max_tokens": int(inference_request.model_parameters['maximum_length']),
+                "max_tokens": int(inference_request.model_parameters['maximumLength']),
                 "stream": True,
             }),
             stream=True
@@ -702,13 +697,11 @@ class InferenceManager:
             if response.status_code != 200:
                 raise Exception(f"Request failed: {response.status_code} {response.reason}")
 
-            total_tokens = 0
             cancelled = False
 
             for token in response.iter_lines():
                 token = token.decode('utf-8')
                 token_json = json.loads(token)
-                total_tokens += 1
                 if cancelled: continue
 
                 if not self.announcer.announce(InferenceResult(
@@ -735,12 +728,12 @@ class InferenceManager:
             json={
                 "inputs": inference_request.prompt,
                 "parameters": {
-                    "max_length": min(inference_request.model_parameters['maximum_length'], 250), # max out at 250 tokens per request, we should handle for this in client side but just in case
+                    "max_length": min(inference_request.model_parameters['maximumLength'], 250), # max out at 250 tokens per request, we should handle for this in client side but just in case
                     "temperature": inference_request.model_parameters['temperature'],
-                    "top_k": inference_request.model_parameters['top_k'],
-                    "top_p": inference_request.model_parameters['top_p'],
-                    "repetition_penalty": inference_request.model_parameters['repetition_penalty'],
-                    "stop_sequences": inference_request.model_parameters['stop_sequences'],
+                    "top_k": inference_request.model_parameters['topK'],
+                    "top_p": inference_request.model_parameters['topP'],
+                    "repetition_penalty": inference_request.model_parameters['repetitionPenalty'],
+                    "stop_sequences": inference_request.model_parameters['stopSequences'],
                 },
                 "options": {
                     "use_cache": False
@@ -840,12 +833,12 @@ class InferenceManager:
             },
             data=json.dumps({
                 "text": inference_request.prompt,
-                "top_p": float(inference_request.model_parameters['top_p']),
-                "top_k": int(inference_request.model_parameters['top_k']),
+                "top_p": float(inference_request.model_parameters['topP']),
+                "top_k": int(inference_request.model_parameters['topK']),
                 "temperature":  float(inference_request.model_parameters['temperature']),
-                "repetition_penalty":  float(inference_request.model_parameters['repetition_penalty']),
-                "length": int(inference_request.model_parameters['maximum_length']),
-                "stop": inference_request.model_parameters['stop_sequences'],
+                "repetition_penalty":  float(inference_request.model_parameters['repetitionPenalty']),
+                "length": int(inference_request.model_parameters['maximumLength']),
+                "stop": inference_request.model_parameters['stopSequences'],
                 "logprobs": 5,
                 "stream": True,
             }),
@@ -944,11 +937,11 @@ class InferenceManager:
         hf = HFInference(inference_request.model_name)
         output = hf.generate(
             prompt=inference_request.prompt,
-            max_length=int(inference_request.model_parameters['maximum_length']),
-            top_p=float(inference_request.model_parameters['top_p']),
-            top_k=int(inference_request.model_parameters['top_k']),
+            max_length=int(inference_request.model_parameters['maximumLength']),
+            top_p=float(inference_request.model_parameters['topP']),
+            top_k=int(inference_request.model_parameters['topK']),
             temperature=float(inference_request.model_parameters['temperature']),
-            repetition_penalty=float(inference_request.model_parameters['repetition_penalty']),
+            repetition_penalty=float(inference_request.model_parameters['repetitionPenalty']),
             stop_sequences=None,
         )
 
@@ -971,9 +964,75 @@ class InferenceManager:
                 cancelled = True
 
     def local_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
-       print("infernece_request", inference_request)
-       print("provider_details", provider_details)
        self.__error_handler__(self.__local_text_generation__, provider_details, inference_request)
+    
+    def __anthropic_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        print("Anthropic", inference_request.model_parameters, inference_request.model_name, provider_details.version_key)
+
+        c = anthropic.Client(provider_details.api_key)
+
+        response = c.completion_stream(
+            prompt=f"{anthropic.HUMAN_PROMPT} {inference_request.prompt}{anthropic.AI_PROMPT}",
+            stopSequences=[anthropic.HUMAN_PROMPT] + inference_request.model_parameters['stopSequences'],
+            temperature=float(inference_request.model_parameters['temperature']),
+            topP=float(inference_request.model_parameters['topP']),
+            topK=int(inference_request.model_parameters['topK']),
+            max_tokens_to_sample=inference_request.model_parameters['maximumLength'],
+            model=inference_request.model_name,
+            stream=True,
+        )
+
+        completion = ""
+        cancelled = False
+
+        for data in response:
+            new_completion = data["completion"]
+            generated_token = new_completion[len(completion):]
+            if cancelled: continue
+
+            if not self.announcer.announce(InferenceResult(
+                uuid=inference_request.uuid,
+                model_name=inference_request.model_name,
+                model_tag=inference_request.model_tag,
+                model_provider=inference_request.model_provider,
+                token=generated_token,
+                probability=None,
+                top_n_distribution=None
+             ), event="infer"):
+                cancelled = True
+
+            completion = new_completion
+
+    def anthropic_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        self.__error_handler__(self.__anthropic_text_generation__, provider_details, inference_request)
+    
+    def __aleph_alpha_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        client = aleph_client(provider_details.api_key)
+        request = CompletionRequest(
+            prompt = Prompt.from_text(inference_request.prompt),
+            temperature= inference_request.model_parameters['temperature'],
+            maximum_tokens=inference_request.model_parameters['maximumLength'],
+            top_p=float(inference_request.model_parameters['topP']),
+            top_k=int(inference_request.model_parameters['topK']),
+            presence_penalty=float(inference_request.model_parameters['repetitionPenalty']),
+            stop_sequences=inference_request.model_parameters['stopSequences']
+        )
+        
+        response = client.complete(request, model=inference_request.model_name)
+        
+        if not self.announcer.announce(InferenceResult(
+            uuid=inference_request.uuid,
+            model_name=inference_request.model_name,
+            model_tag=inference_request.model_tag,
+            model_provider=inference_request.model_provider,
+            token=response.completions[0].completion,
+            probability=None,
+            top_n_distribution=None
+        ), event="infer"):
+            cancelled = True
+
+    def aleph_alpha_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        self.__error_handler__(self.__aleph_alpha_text_generation__, provider_details, inference_request)
     
     def get_announcer(self):
         return self.announcer 
@@ -983,13 +1042,12 @@ class ModelManager:
         self.sse_client = sse_client
         self.local_cache = {}
         self.inference_manager = InferenceManager(sse_client)
-        self.models_json = json.load(pkg_resources.open_text("server", 'models.json'))
 
     def get_available_models(self):
         provider_model_map = {}
-        for providers in self.models_json:
-            if "models" in self.models_json[providers]:
-                provider_model_map[providers] = self.models_json[providers]['models'].keys()
+        for providers in MODELS_JSON:
+            if "models" in MODELS_JSON[providers]:
+                provider_model_map[providers] = MODELS_JSON[providers]['models'].keys()
             else:
                 provider_model_map[providers] = []
         return provider_model_map
@@ -1006,7 +1064,7 @@ class ModelManager:
         return model_parameters
 
     def get_model_with_parameters(self, provider: str, model_name: str):
-        return self.models_json[provider]['models'][model_name]
+        return MODELS_JSON[provider]['models'][model_name]
     
     def get_model_attribute(self, model_name: str, attribute: str):
         return {}
@@ -1022,6 +1080,10 @@ class ModelManager:
             provider_key = "HUGGINGFACE_API_KEY"
         elif (provider == "forefront"):
             provider_key = "FOREFRONT_API_KEY"
+        elif (provider == "anthropic"):
+            provider_key = "ANTHROPIC_API_KEY"
+        elif (provider == "aleph-alpha"):
+            provider_key = "ALEPH_ALPHA_API_KEY"
         else:
             provider_key = "UNKNOWN_API_KEY"
         if os.environ.get(provider_key) is None:
@@ -1035,6 +1097,7 @@ class ModelManager:
             api_key=self.get_provider_key(inference_request.model_provider),
             version_key=None
         )
+
         print("received inference request", inference_request.model_provider)
         if inference_request.model_provider == "openai":
             return self.inference_manager.openai_text_generation(provider_details, inference_request)
@@ -1047,8 +1110,11 @@ class ModelManager:
             inference_request.model_name = self.get_model_attribute(f"forefront:{inference_request.model_name}", "name")
             return self.inference_manager.forefront_text_generation(provider_details, inference_request)
         elif inference_request.model_provider == "textgeneration":
-            print("local text generation beginning")
             return self.inference_manager.local_text_generation(provider_details, inference_request)
+        elif inference_request.model_provider == "anthropic":
+            return self.inference_manager.anthropic_text_generation(provider_details, inference_request)
+        elif inference_request.model_provider == "aleph-alpha":
+            return self.inference_manager.aleph_alpha_text_generation(provider_details, inference_request)
         else:
             raise Exception(f"Unknown model provider, {inference_request.model_provider}. Please add a generation function in InferenceManager or route in ModelManager.text_generation")
     
@@ -1065,7 +1131,6 @@ def bulk_completions(tasks: List[InferenceRequest]):
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
         futures = []
         for inference_request in tasks:
-            print("sending inference request:", inference_request.model_provider)
             futures.append(executor.submit(GlobalState.model_manager.text_generation, inference_request))
 
         [future.result() for future in futures]
@@ -1080,14 +1145,25 @@ def bulk_completions(tasks: List[InferenceRequest]):
         top_n_distribution=None
     ), event="done")
 
-def create_app():
-    app.config['PORT'] = 1235
-    return app
-
-@click.group(cls=FlaskGroup, create_app=create_app)
+@click.group()
 def cli():
     pass
 
+@cli.command()
+@click.option('--host',  '-h', default='localhost', help='The host to bind to [default: localhost]')
+@click.option('--port', '-p', default=5432, help='The port to bind to [default: 5432]')
+@click.option('--env', '-e', default=".env", help='Environment file to read and store API keys')
+@click.option('--models', '-m', default=None, help='Config file containing model information')
+def run(host, port, env, models):
+    global DOTENV_FILE_PATH, MODELS_JSON
+    DOTENV_FILE_PATH = env
+    
+    if models and os.path.exists(models):
+        MODELS_JSON = json.loads(open(models).read())
+    else:
+        MODELS_JSON = json.loads(pkg_resources.open_text("server", 'models.json').read())
+
+    app.run(host=host, port=port)
+
 if __name__ == '__main__':
-    print("RUNNING!!!")
-    app.run(host='127.0.0.1', port=1235, debug=True, threaded=True)
+    cli()

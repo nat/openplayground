@@ -1,9 +1,7 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip"
 import React, {
-  ChangeEvent,
   HTMLInputTypeAttribute,
   ReactElement,
-  SetStateAction,
   useEffect,
   useState,
   useEffect
@@ -24,7 +22,6 @@ interface ParameterSliderProps {
   normalizeInputData: (value: string) => any
   normalizeSliderData?: Function
   onChangeValue: ((value: number) => void) | undefined
-  setParentState: SetStateAction<any>
   tooltipContent: ReactElement
 }
 
@@ -40,20 +37,14 @@ const ParamaterSlider: React.FC<ParameterSliderProps> = ({
   type = "number",
   tooltipContent,
   onChangeValue,
-  setParentState,
 }) => {
   // TODO: deprecate this
   const [value, setValue] = useState(defaultValue) 
-
-  useEffect(() => {
-    setValue(defaultValue)
-  }, [defaultValue])
-
   const { isLg } = useBreakpoint("lg")
 
   useEffect(() => {
     setValue(defaultValue)
-  }, [defaultValue]);
+  }, [defaultValue])
 
   // prevents slider from overflowing if value is > max val (can happen if user types in big number in input before unfocusing)
   const sliderValue = Math.max(
@@ -73,6 +64,7 @@ const ParamaterSlider: React.FC<ParameterSliderProps> = ({
                 {title}
               </p>
               <Input
+                inputMode="decimal"
                 className="float-right h-6 p-0 w-14"
                 type={type}
                 value={[value.toString()]}
@@ -81,12 +73,12 @@ const ParamaterSlider: React.FC<ParameterSliderProps> = ({
                 onChange={(e) => {
                   if (normalizeInputData) {
                     let normalized = normalizeInputData(e.target.value)
-                    const val = e.target.value
-                    console.log({ val, normalized })
-
+                    
                     setValue(normalized)
-                    setParentState(normalized)
-                    if (onChangeValue) onChangeValue(normalized)
+
+                    if (!isNaN(normalized) && onChangeValue) { 
+                      onChangeValue(normalized)
+                    }
                   }
                 }}
                 onBlur={(e) => {
@@ -94,7 +86,15 @@ const ParamaterSlider: React.FC<ParameterSliderProps> = ({
                     Number(min),
                     Math.min(Number(max), Number(value))
                   )
+                  
+                  if (isNaN(normalized)) {
+                    normalized = defaultValue
+                  }
                   setValue(normalized)
+
+                  if (onChangeValue) {
+                    onChangeValue(normalized)
+                  }
                 }}
                 disabled={disabled}
                 min={min}
@@ -109,11 +109,9 @@ const ParamaterSlider: React.FC<ParameterSliderProps> = ({
               max={max}
               step={step}
               onValueChange={(e) => {
-                setParentState(e[0])
+                setValue(e[0])
               }}
               onValueCommit={(e) => {
-                setValue(e[0])
-                setParentState(e[0])
                 if (onChangeValue) onChangeValue(e[0])
               }}
             />

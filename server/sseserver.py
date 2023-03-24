@@ -14,12 +14,14 @@ class SSEQueue:
         self.listeners = []
 
     def listen(self):
+        print("LISTENING")
         q = queue.Queue(maxsize=50) # what about multiprocessing.Queue?
         self.listeners.append(q)
         return q
 
     def announce(self, message: str):
         print("annnouncing from queue", message, self.listeners)
+        print("--?", len(self.listeners))
         for i in reversed(range(len(self.listeners))):
             try:
                 self.listeners[i].put_nowait(message)

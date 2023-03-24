@@ -140,6 +140,7 @@ class ServerSentEventsBlueprint(Blueprint):
                 print("PUBSUB MESSAGE:", pubsub_message)                
                 if pubsub_message['type'] == 'message':
                     msg_dict = json.loads(pubsub_message['data'])
+                    print("PUBLISHING", msg_dict)
                     if msg_dict["type"] == "done":
                         print("Done streaming SSE")
                         break

@@ -5,7 +5,6 @@ import { useBreakpoint } from "../hooks/useBreakpoint"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip"
 
 interface MultiSelectProps {
-  setParentState: React.SetStateAction<any>
   maxOptions?: number
   tooltipContent: React.ReactElement
   defaultOptions: any,
@@ -14,7 +13,6 @@ interface MultiSelectProps {
 }
 
 const MultiSelect: React.FC<MultiSelectProps> = ({
-  setParentState,
   maxOptions,
   tooltipContent,
   defaultOptions,
@@ -67,7 +65,6 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
               onChange={(e) => {
                 console.log(e)
                 const values = e.map((i: any) => i.value)
-                setParentState(values)
                 if (onValueChange) onValueChange(values)
               }}
             />

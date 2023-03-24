@@ -3,15 +3,11 @@ import NavBar from "../components/navbar"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { EyeIcon, EyeOffIcon, Loader2, X } from "lucide-react"
-import { Label } from "../components/ui/label"
 import { ScrollArea } from "../components/ui/scroll-area"
-import { Separator } from "../components/ui/separator"
 import { Checkbox } from "../components/ui/checkbox"
 import { APIContext, ModelContext } from "../app"
 import { useBreakpoint } from "../hooks/useBreakpoint"
-import { KeyBindingUtil } from "draft-js"
 import { useToast } from "../hooks/ui/use-toast"
-import { json } from "react-router-dom"
 
 const ENDPOINT_URL =
   process.env.NODE_ENV === "production" || !process.env.ENDPOINT_URL
@@ -242,15 +238,21 @@ export default function Settings() {
     let model_key = `model_${model}`
     let model_value = JSON.parse(localStorage.getItem(model_key) || "{}")
     let modelProvider = model_value.model_provider
-    // can probably abstract this into a utils function
-    if (modelProvider === "textgeneration") {
-      modelProvider = "textgeneration"
-    } else if (modelProvider === "huggingface") {
-      modelProvider = "huggingface"
-    } else if (modelProvider === "cohere") {
-      modelProvider = "cohere"
-    } else if (modelProvider === "OpenAI") {
-      modelProvider = "openai"
+
+
+    switch(modelProvider) {
+      case "textgeneration":
+        modelProvider = "textgeneration"
+        break;
+      case "huggingface":
+        modelProvider = "huggingface"
+        break;
+      case "cohere":
+        modelProvider = "cohere"
+        break;
+      case "OpenAI":
+        modelProvider = "openai"
+        break;
     }
     // we now have key to remove from available models
     const copyAvailableModels = { ...availableModels }
