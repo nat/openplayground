@@ -3,8 +3,7 @@ import React, {
   HTMLInputTypeAttribute,
   ReactElement,
   useEffect,
-  useState,
-  useEffect
+  useState
 } from "react"
 import { Input } from "./ui/input"
 import { Slider } from "./ui/slider"
