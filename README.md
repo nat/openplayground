@@ -24,6 +24,8 @@ $ pip install openplayground
 $ openplayground run
 ```
 
+This runs a Flask process, so you can add the typical flags such as setting a different port `openplayground run -p 1235` and others. 
+
 ## How to run for development
 
 ```sh
