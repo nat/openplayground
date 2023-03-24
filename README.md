@@ -48,7 +48,7 @@ $ cd server && pip3 install -r requirements.txt && python app.py
 ### llama.cpp
 
 
-### Adding models to openplayground 
+## Adding models to openplayground 
 
 Models and providers have three types in openplayground:
 + Searchable
