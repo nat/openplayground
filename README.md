@@ -2,9 +2,7 @@
 
 An LLM playground you can run on your laptop.
 
-https://user-images.githubusercontent.com/111631/227391985-02cb75c2-3825-418b-88be-f5afd6f7c9a9.mp4
-
-https://user-images.githubusercontent.com/111631/227391395-906c7383-1879-4e69-a38f-d8a15dc4305c.mp4
+https://user-images.githubusercontent.com/111631/227393790-7e945892-aa52-4d6b-8b70-c56f225dbd2a.mp4
 
 #### Features
 
