@@ -45,5 +45,85 @@ $ cd server && flask run --debug -p $PORT
 
 ### llama.cpp
 
+
+### Adding models to openplayground 
+
+Models and providers have three types in openplayground:
++ Searchable
++ Local inference
++ API
+
+You can add models in `server/models.json` with the following schema:
+
+#### Local inference
+
+For models running locally on your device you can add them to openplayground like the following (a minimal example):
+```json
+"llama": {
+        "api_key" : false,
+        "models" : {
+            "llama-70b": {
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1.0
+                        ]
+                    },
+                }
+            }
+        }
+}
+```
+
+Keep in mind you will need to add a generation method for your model in `server/app.py`. Take a look at `local_text_generation()` as an example.
+
+#### API Provider Inference
+
+This is for model providers like OpenAI, cohere, forefront, and more. You can connect them easily into openplayground (a minimal example):
+```json
+"cohere": {
+        "api_key" : true,
+        "models" : {
+            "xlarge": {
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1.0
+                        ]
+                    },
+                }
+            }
+        }
+}
+```
+
+Keep in mind you will need to add a generation method for your model in `server/app.py`. Take a look at `openai_text_generation()` or `cohere_text_generation()` as an example.
+
+#### Searchable models
+
+We use this for Huggingface Remote Inference models, the search endpoint is useful for scaling to N models in the settings page.
+
+```json
+"provider_name": {
+        "api_key": true,
+        "search": {
+            "endpoint": "ENDPOINT_URL"
+        },
+        "parameters": {
+            "parameter": {
+                "value": 1.0,
+                "range": [
+                    0.1,
+                    1.0
+                ]
+            },
+        }
+}
+```
+
 ## Credits
 
