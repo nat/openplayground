@@ -1,10 +1,13 @@
 # openplayground
 
-An LLM playground you can run on your laptop
+An LLM playground you can run on your laptop.
 
-INSERT VIDEO
+https://user-images.githubusercontent.com/111631/227391395-906c7383-1879-4e69-a38f-d8a15dc4305c.mp4
 
-Features:
+https://user-images.githubusercontent.com/111631/227391395-906c7383-1879-4e69-a38f-d8a15dc4305c.mp4
+
+#### Features
+
 - Use any model from OpenAI, Anthropic, Cohere, Forefront, HuggingFace, Aleph Alpha, llama.cpp
 - Full playground UI, including history, parameter tuning, keyboard shortcuts, logprops
 - Compare screen where you run run test models against the same prompt simultaneously, individually tune model parameters, the try same model multiple times with different paramaters
