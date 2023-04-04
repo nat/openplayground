@@ -12,6 +12,7 @@ import {
   Editor,
   EditorState,
   convertFromRaw,
+  convertToRaw,
   CompositeDecorator,
   SelectionState,
   Modifier,
@@ -257,7 +258,7 @@ const ModelCard = forwardRef((props, ref) => {
       return <span data-offset-key={children[0].key}>{children}</span>
     }
   }
-
+  
   const getEditorState = useCallback((): EditorState => editorStateRef.current, [])
 
   const createDecorator = () => new CompositeDecorator([{
@@ -516,6 +517,16 @@ function PromptArea({showDialog}) {
   const {modelsStateContext} = useContext(ModelsStateContext)
   const {editorContext, setEditorContext} = useContext(EditorContext)
   
+  React.useEffect(() => {
+    return () => {
+      setEditorContext({
+        ...editorContext,
+        internalState: convertToRaw(editorStateRef.current.getCurrentContent()),
+        prompt: editorStateRef.current.getCurrentContent().getPlainText()
+      }, true)
+    }
+  }, []);
+
   const [editorState, setEditorState] = React.useState(
     EditorState.moveFocusToEnd(EditorState.createWithContent(
       editorContext.internalState !== null ? convertFromRaw(editorContext.internalState): ContentState.createFromText(editorContext.prompt)

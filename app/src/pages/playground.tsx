@@ -319,6 +319,16 @@ const PromptCompletionEditor = ({showDialog}) => {
     highlightModelsRef.current = parametersContext.highlightModels
   })
 
+  React.useEffect(() => {
+    return () => {
+      setEditorContext({
+        ...editorContext,
+        internalState: convertToRaw(editorStateRef.current.getCurrentContent()),
+        prompt: editorStateRef.current.getCurrentContent().getPlainText()
+      }, true)
+    }
+  }, []);
+
   useEffect(() => {
     if (editorContext.internalState) {
       setEditorState(
@@ -582,14 +592,9 @@ const PromptCompletionEditor = ({showDialog}) => {
 
   const editorStateRef = useRef<EditorState>(editorState)
   
-  /*useEffect(() => {
-    console.log("HERE AS WELL???")
-    setEditorContext({
-      internalState: convertToRaw(editorState.getCurrentContent())
-    })
-  }, [
-    editorState
-  ])*/
+  useEffect(() => {
+    editorStateRef.current = editorState;
+  }, [editorState]);
 
   useEffect(() => {
     setEditorState(
