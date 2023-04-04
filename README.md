@@ -131,4 +131,4 @@ We use this for Huggingface Remote Inference models, the search endpoint is usef
 
 #### Credits
 
-Instigated by Nat Friedman. Initial repl.it bounty work by [Zain Huda](https://github.com/zainhuda). Many features and extensive coding by Alex Lourenco.
+Instigated by Nat Friedman. Initial implementation by [Zain Huda](https://github.com/zainhuda) as a repl.it bounty. Many features and extensive refactoring by Alex Lourenco.
