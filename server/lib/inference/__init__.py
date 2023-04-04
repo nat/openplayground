@@ -144,7 +144,7 @@ class InferenceManager:
             probability=None,
             top_n_distribution=None
         )
-    
+
         if not self.announcer.announce(InferenceResult(
             uuid=inference_request.uuid,
             model_name=inference_request.model_name,
@@ -180,7 +180,7 @@ class InferenceManager:
             infer_result.token = f"[ERROR] OpenAI API request exceeded rate limit: {e}"
             logger.error(f"OpenAI API request exceeded rate limit: {e}")
         except requests.exceptions.RequestException as e:
-            logging.error("RequestException: {}".format(e))
+            logging.error(f"RequestException: {e}")
             infer_result.token = f"[ERROR] No response from {infer_result.model_provider } after sixty seconds"
         except ValueError as e:
             if infer_result.model_provider == "huggingface-local":
@@ -204,7 +204,7 @@ class InferenceManager:
         current_date = datetime.now().strftime("%Y-%m-%d")
 
         if inference_request.model_name == "gpt-4":
-            system_content = f"You are GPT-4, a large language model trained by OpenAI. Answer as concisely as possible"
+            system_content = "You are GPT-4, a large language model trained by OpenAI. Answer as concisely as possible"
         else:
             system_content = f"You are ChatGPT, a large language model trained by OpenAI. Answer as concisely as possible. Knowledge cutoff: 2021-09-01 Current date: {current_date}"
 
@@ -233,7 +233,7 @@ class InferenceManager:
 
             delta = response['delta']
 
-            if not "content" in delta:
+            if "content" not in delta:
                 continue
 
             generated_token = delta["content"]
@@ -326,7 +326,7 @@ class InferenceManager:
 
     def openai_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         # TODO: Add a meta field to the inference so we know when a model is chat vs text
-        if inference_request.model_name == "gpt-3.5-turbo" or inference_request.model_name == "gpt-4":
+        if inference_request.model_name in ["gpt-3.5-turbo", "gpt-4"]:
             self.__error_handler__(self.__openai_chat_generation__, provider_details, inference_request)
         else:
             self.__error_handler__(self.__openai_text_generation__, provider_details, inference_request)
@@ -402,7 +402,6 @@ class InferenceManager:
 
         content_type = response.headers["content-type"]
 
-        total_tokens = 0
         cancelled = False
 
         if response.status_code != 200:
@@ -423,6 +422,7 @@ class InferenceManager:
                 top_n_distribution=None
             ), event="infer")
         else:
+            total_tokens = 0
             for response in response.iter_lines():
                 response = response.decode('utf-8')
                 if response == "":
@@ -434,23 +434,26 @@ class InferenceManager:
                     raise Exception(f"{error}")
 
                 token = response_json['token']
-                
+
                 total_tokens += 1
-                
+
                 if token["special"]:
                     continue
-                
+
                 if cancelled: continue
 
-                if not self.announcer.announce(InferenceResult(
-                    uuid=inference_request.uuid,
-                    model_name=inference_request.model_name,
-                    model_tag=inference_request.model_tag,
-                    model_provider=inference_request.model_provider,
-                    token= " " if token['id'] == 3 else response_json['token']['text'],
-                    probability=response_json['token']['logprob'],
-                    top_n_distribution=None
-                ), event="infer"):
+                if not self.announcer.announce(
+                    InferenceResult(
+                        uuid=inference_request.uuid,
+                        model_name=inference_request.model_name,
+                        model_tag=inference_request.model_tag,
+                        model_provider=inference_request.model_provider,
+                        token=" " if token['id'] == 3 else token['text'],
+                        probability=token['logprob'],
+                        top_n_distribution=None,
+                    ),
+                    event="infer",
+                ):
                     cancelled = True
                     logger.info(f"Cancelled inference for {inference_request.uuid} - {inference_request.model_name}")
            
@@ -459,24 +462,24 @@ class InferenceManager:
 
     def __forefront_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         with requests.post(
-            f"https://shared-api.forefront.link/organization/gPn2ZLSO3mTh/{inference_request.model_name}/completions/{provider_details.version_key}",
-            headers={
-                "Authorization": f"Bearer {provider_details.api_key}",
-                "Content-Type": "application/json",
-            },
-            data=json.dumps({
-                "text": inference_request.prompt,
-                "top_p": float(inference_request.model_parameters['topP']),
-                "top_k": int(inference_request.model_parameters['topK']),
-                "temperature":  float(inference_request.model_parameters['temperature']),
-                "repetition_penalty":  float(inference_request.model_parameters['repetitionPenalty']),
-                "length": int(inference_request.model_parameters['maximumLength']),
-                "stop": inference_request.model_parameters['stopSequences'],
-                "logprobs": 5,
-                "stream": True,
-            }),
-            stream=True
-        ) as response:
+                f"https://shared-api.forefront.link/organization/gPn2ZLSO3mTh/{inference_request.model_name}/completions/{provider_details.version_key}",
+                headers={
+                    "Authorization": f"Bearer {provider_details.api_key}",
+                    "Content-Type": "application/json",
+                },
+                data=json.dumps({
+                    "text": inference_request.prompt,
+                    "top_p": float(inference_request.model_parameters['topP']),
+                    "top_k": int(inference_request.model_parameters['topK']),
+                    "temperature":  float(inference_request.model_parameters['temperature']),
+                    "repetition_penalty":  float(inference_request.model_parameters['repetitionPenalty']),
+                    "length": int(inference_request.model_parameters['maximumLength']),
+                    "stop": inference_request.model_parameters['stopSequences'],
+                    "logprobs": 5,
+                    "stream": True,
+                }),
+                stream=True
+            ) as response:
             if response.status_code != 200:
                 raise Exception(f"Request failed: {response.status_code} {response.reason}")
             cancelled = False
@@ -515,10 +518,10 @@ class InferenceManager:
 
                     for index, new_token in enumerate(new_tokens):
                         generated_token = new_token
-            
+
                         probability = token_logprobs[total_tokens + index]
                         top_logprobs = logprobs["top_logprobs"][total_tokens + index]
-                            
+
                         chosen_log_prob = 0
                         prob_dist = ProablityDistribution(
                             log_prob_sum=0, simple_prob_sum=0, tokens={},
@@ -529,11 +532,11 @@ class InferenceManager:
                             simple_prob = round(math.exp(log_prob) * 100, 2)
                             prob_dist.tokens[token] = [log_prob, simple_prob]
 
-                            if token == new_token:
+                            if token == generated_token:
                                 chosen_log_prob = round(log_prob, 2)
-            
+
                             prob_dist.simple_prob_sum += simple_prob
-                            
+
                         prob_dist.tokens = dict(
                             sorted(prob_dist.tokens.items(), key=lambda item: item[1][0], reverse=True)
                         )
