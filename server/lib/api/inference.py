@@ -33,7 +33,7 @@ def stream_inference():
 
     if not isinstance(data['prompt'], str) or not isinstance(data['models'], list):
         return create_response_message("Invalid request", 400)
-    
+
     request_uuid = "1"
 
     prompt = data['prompt']
@@ -51,10 +51,10 @@ def stream_inference():
 
         if not isinstance(name, str) or not isinstance(tag, str) or not isinstance(parameters, dict):
             continue
-        
+
         if provider not in providers:
             continue
-        
+
         models_name_provider.append({"name": model['name'], "provider": model['provider']})
 
         required_parameters = []
@@ -91,23 +91,26 @@ def stream_inference():
             if param == "stopSequences":
                 if parameters[param] is None:
                     parameters[param] = []
-                if (not isinstance(parameters[param], list) and not parameters[param] == None):
-                    return create_response_message(f"Invalid stopSequences parameter", 400)
+                if (
+                    not isinstance(parameters[param], list)
+                    and parameters[param] is not None
+                ):
+                    return create_response_message("Invalid stopSequences parameter", 400)
             elif not isinstance(parameters[param], (int, float)) and not (isinstance(parameters[param], str) and parameters[param].replace('.', '').isdigit()):
                 return create_response_message(f"Invalid parameter: {param} - {name}", 400)
-            
+
             sanitized_params[param] = parameters[param]
 
         all_tasks.append(InferenceRequest(
             uuid=request_uuid, model_name=name, model_tag=tag, model_provider=provider,
             model_parameters=sanitized_params, prompt=prompt)
         )
-    
+
     uuid = "1"
 
-    if len(all_tasks) == 0:
+    if not all_tasks:
         return create_response_message("Invalid Request", 400)
-    
+
     thread = threading.Thread(target=bulk_completions, args=(global_state, all_tasks,))
     thread.start()
 
@@ -140,18 +143,20 @@ def bulk_completions(global_state, tasks: List[InferenceRequest]):
             local_tasks.append(task)
         else:
             remote_tasks.append(task)
-    if len(remote_tasks) > 0:
+    if remote_tasks:
         with ThreadPoolExecutor(max_workers=len(remote_tasks)) as executor:
-            futures = []
-            for inference_request in remote_tasks:
-                futures.append(executor.submit(global_state.text_generation, inference_request))
-
+            futures = [
+                executor.submit(
+                    global_state.text_generation, inference_request
+                )
+                for inference_request in remote_tasks
+            ]
             [future.result() for future in futures]
-    
+
     #Not safe to assume that localhost can run multiple models at once
     for inference_request in local_tasks:
         global_state.text_generation(inference_request)
-        
+
     global_state.get_announcer().announce(InferenceResult(
         uuid=tasks[0].uuid,
         model_name=None,

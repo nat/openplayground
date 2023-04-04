@@ -46,40 +46,38 @@ class Storage:
             self.models_json_path = os.path.join(APP_DIR, 'models.json')
         else:
             self.models_json_path = models_json_path
-            
+
         if env_file_path is None:
             self.env_file_path = os.path.join(os.getcwd(), 'env')
         else:
             load_dotenv(env_file_path)
-        
+
         with open(self.models_json_path, 'r') as f:
             self.models_json = json.load(f)
 
         for provider_name, provider in self.models_json.items():
-            models = []
-            for model_name, model in provider['models'].items():
-                models.append(
-                    Model(
-                        model_name,
-                        model['enabled'],
-                        provider_name,
-                        model['status'],
-                        model['parameters'],
-                    )
+            models = [
+                Model(
+                    model_name,
+                    model['enabled'],
+                    provider_name,
+                    model['status'],
+                    model['parameters'],
                 )
-
+                for model_name, model in provider['models'].items()
+            ]
             self.providers.append(
                 Provider(
                     provider_name,
                     models,
                     provider.get('remoteInference', None),
                     provider.get('defaultParameters', None),
-                    os.environ.get(provider_name.upper() + '_API_KEY'),
+                    os.environ.get(f'{provider_name.upper()}_API_KEY'),
                     provider['requiresAPIKey'],
-                    search_url=provider.get('searchURL', None)
+                    search_url=provider.get('searchURL', None),
                 )
             )
-            
+
             self.models.extend(models)
 
         for event in [
@@ -110,10 +108,7 @@ class Storage:
         return models_by_provider
     
     def get_model(self, model_name: str) -> Model:
-        for model in self.models:
-            if model.name == model_name:
-                return model
-        return None
+        return next((model for model in self.models if model.name == model_name), None)
     
     def get_providers(self) -> List[Provider]:
         return self.providers
@@ -122,10 +117,14 @@ class Storage:
         return [provider.name for provider in self.providers]
     
     def get_provider(self, provider_name: str) -> Provider:
-        for provider in self.providers:
-            if provider.name == provider_name:
-                return provider
-        return None
+        return next(
+            (
+                provider
+                for provider in self.providers
+                if provider.name == provider_name
+            ),
+            None,
+        )
     
     def update_provider_api_key(self, provider_name: str, api_key: str):
         provider = self.get_provider(provider_name)
@@ -135,8 +134,8 @@ class Storage:
 
         if not os.path.exists(self.env_file_path):
             open(self.env_file_path, 'a').close()
-        
-        set_key(self.env_file_path, provider_name.upper() + '_API_KEY', api_key)
+
+        set_key(self.env_file_path, f'{provider_name.upper()}_API_KEY', api_key)
         load_dotenv(self.env_file_path)
 
         self.event_emitter.emit(EVENTS.PROVIDER_API_KEY_UPDATE, provider_name)
@@ -171,9 +170,8 @@ class Storage:
         Saves the models.json file
         '''
         logger.info('Saving models.json')
-        new_json = {}
-        for provider in self.providers:
-            new_json[provider.name] = {
+        new_json = {
+            provider.name: {
                 'models': {
                     model.name: {
                         'enabled': model.enabled,
@@ -187,7 +185,8 @@ class Storage:
                 'defaultParameters': provider.default_parameters,
                 'searchURL': provider.search_url,
             }
-
+            for provider in self.providers
+        }
         with open(self.models_json_path, 'w') as f:
             json.dump(new_json, f, indent=4)
 
