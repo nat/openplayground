@@ -343,14 +343,7 @@ const PromptCompletionEditor = ({showDialog}) => {
     passedInPrompt = ""
   ) => {
     const prompt  = regenerate ? passedInPrompt : editorState.getCurrentContent().getPlainText();
-    console.warn("Prompt became", prompt, "old", passedInPrompt)
-    if (prompt.length > 5000) {
-      showDialog({
-        title: "Prompt is too large!",
-        message: "Please reduce the size of your prompt for the generation to be submitted successfully. Your current size is " + prompt.length + " characters, however, we currently allow a maximum of 5000 characters.",
-      })
-      return
-    }
+
     setGenerating(true)
     setEditorContext({
       prePrompt: prompt,
