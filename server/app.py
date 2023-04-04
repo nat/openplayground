@@ -42,6 +42,11 @@ def serve(path):
 
     return send_from_directory(app.static_folder, path)
 
+@app.errorhandler(404)
+def page_not_found(i):
+    path = 'index.html'
+    return send_from_directory(app.static_folder, path)
+
 @app.before_request
 def before_request():
     g.global_state = app.config['GLOBAL_STATE']
