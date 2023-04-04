@@ -181,6 +181,7 @@ const ProviderCredentials = ({provider, providerRequiresAPIKey, apiKey, setAPIKe
 const ProviderModelSelection = ({
   provider,
   apiKey,
+  providerRequiresAPIKey,
   providerModels, toggleModel
 }: ProviderProps) => {
   const handleModelSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -212,7 +213,7 @@ const ProviderModelSelection = ({
               <Checkbox
                 key={model}
                 className="float-right"
-                disabled={apiKey === "" || apiKey === null}
+                disabled={providerRequiresAPIKey && (apiKey === "" || apiKey === null)}
                 onCheckedChange={(event) =>
                   handleModelSelect(model.name, event)
                 }
