@@ -196,7 +196,7 @@
         }
       },
       "gpt-3.5-turbo": {
-        "enabled": true,
+        "enabled": false,
         "status": "ready",
         "meta": [
           "logprobs"
