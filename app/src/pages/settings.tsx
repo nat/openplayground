@@ -455,14 +455,14 @@ export default function Settings() {
   const providersButtons = () => 
     Object.entries(providers).map(([name, _]) => 
       <React.Fragment key={name}>
-        <Button
-          variant={providerName == name ? "subtle" : "ghost"}
-          size={isLg ? "default" : "sm"}
-          className="text-center lg:text-base lg:text-left lg:w-full lg:text-left"
+        <button
+          className={`block w-full text-left px-2 py-1 border-l-2 ${
+            providerName === name ? "border-blue-500" : "border-transparent"
+          }`}
           onClick={(e) => setProviderName(name)}
         >
-          {name }
-        </Button>
+          <span className={providerName === name ? "font-bold": "font-normal"}>{name}</span>
+        </button>
       </React.Fragment>
     )
 
