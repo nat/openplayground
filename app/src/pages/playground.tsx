@@ -286,6 +286,7 @@ class EditorWrapper extends React.Component {
         onChange={(editorState: any) => {
           setEditorState(editorState)
         }}
+        stripPastedStyles
       />
     )
   }
