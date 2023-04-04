@@ -57,6 +57,8 @@ export const styleMap = {
         return styles.openai;
       case "huggingface-local":
         return styles.huggingface_local;
+      case "llama-local":
+        return styles.huggingface_local;
       case "cohere":
         return styles.cohere;
       case "huggingface":

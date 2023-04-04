@@ -72,6 +72,9 @@ def stream_inference():
         elif provider == "forefront":
             name = name.removeprefix("forefront:")
             required_parameters = ["temperature", "topP", "topK", "repetitionPenalty", "maximumLength", "stopSequences"]
+        elif provider == "llama-local":
+            name = name.removeprefix("llama-local:")
+            required_parameters = ["temperature"]
         elif provider == "huggingface-local":
             name = name.removeprefix("huggingface-local:")
             required_parameters = ["temperature", "topP",  "topK", "repetitionPenalty", "maximumLength"]
@@ -136,7 +139,7 @@ def bulk_completions(global_state, tasks: List[InferenceRequest]):
     local_tasks = []
     remote_tasks = []
     for task in tasks:
-        if task.model_provider == "huggingface-local":
+        if task.model_provider in ["huggingface-local", "llama-local"]:
             local_tasks.append(task)
         else:
             remote_tasks.append(task)

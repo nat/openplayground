@@ -24,6 +24,7 @@ import {handleSelectModel} from "../lib/utils"
 
 const modelProviders = {
   forefront: "Forefront",
+  "llama-local": "Llama (Local)",
   "huggingface-local": "Hugging Face (Local)",
   huggingface: "Hugging Face",
   "aleph-alpha": "Aleph Alpha",
