@@ -117,13 +117,28 @@ class NotificationManager:
     def __init__(self, sse_queue: SSEQueueWithTopic):
         self.event_emitter = EventEmitter()
         self.event_emitter.on(EVENTS.MODEL_UPDATED, self.__model_updated_callback__)
+        self.event_emitter.on(EVENTS.MODEL_ADDED, self.__model_added_callback__)
         #TODO Fix the bug where SSE gets blocked
         #self.event_emitter.on(EVENTS.MODEL_DOWNLOAD_UPDATE, self.__model_download_update_callback__)
         self.sse_queue = sse_queue
 
+    def __model_added_callback__(self, model_name, model):
+        if model.status == 'ready':
+            self.sse_queue.publish(json.dumps({
+                'type': 'notification',
+                'data': {
+                    'message': {
+                        'event': 'modelAdded',
+                        'data': {
+                            'model': model.name,
+                            'provider': model.provider
+                        }
+                    }
+                }
+            }))
+
     def __model_updated_callback__(self, model_name, model):
         if model.status == 'ready':
-            print("Publishing model added event...")
             self.sse_queue.publish(json.dumps({
                 'type': 'notification',
                 'data': {
@@ -138,8 +153,6 @@ class NotificationManager:
             }))
 
     def __model_download_update_callback__(self, _, model, progress):
-        print(f"Model download progress: {model} {progress}")
-
         self.sse_queue.publish(json.dumps({
             'type': 'notification',
             'data': {
@@ -171,6 +184,7 @@ class DownloadManager:
 
         for model in models:
             if model.status == 'pending':
+                print(model)
                 self.model_queue.put(model)
 
         t = threading.Thread(target=self.__download_loop__)

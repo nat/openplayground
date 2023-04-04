@@ -532,10 +532,10 @@
         ]
       },
       "topP": {
-        "value": 1,
+        "value": 0.99,
         "range": [
-          0.1,
-          1
+          0.01,
+          0.99
         ]
       },
       "topK": {
@@ -548,7 +548,7 @@
       "repetitionPenalty": {
         "value": 1,
         "range": [
-          0,
+          0.1,
           2
         ]
       },
@@ -580,10 +580,10 @@
         ]
       },
       "topP": {
-        "value": 1,
+        "value": 0.99,
         "range": [
           0.1,
-          1
+          0.99
         ]
       },
       "topK": {
@@ -596,7 +596,7 @@
       "repetitionPenalty": {
         "value": 1,
         "range": [
-          0,
+          0.1,
           2
         ]
       }
@@ -761,7 +761,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -809,7 +809,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -857,7 +857,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -905,7 +905,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -954,7 +954,7 @@
       "repetitionPenalty": {
         "value": 1,
         "range": [
-          0,
+          0.1,
           2
         ]
       }

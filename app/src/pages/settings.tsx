@@ -83,13 +83,13 @@ const ProviderSearchModels = ({
         Model Search
       </h3>
       <p>
-        Search for a model or part of a model to get matches from
-        {provider} Hub
+        Search for a model or part of a model to get matches from {provider} Hub
       </p>
 
       <form onSubmit={searchModel}>
         <div className="flex w-full max-w-sm items-center space-x-2 mt-2">
           <Input
+            disabled = {providerRequiresAPIKey && (apiKey === "" || apiKey === null)}
             type="text"
             id="model-query"
              placeholder="Search Query"
@@ -97,7 +97,7 @@ const ProviderSearchModels = ({
           />
           <Button
             type="submit"
-            disabled = {providerRequiresAPIKey && apiKey === ""}
+            disabled = {providerRequiresAPIKey && (apiKey === "" || apiKey === null)}
           >
             Search
           </Button>

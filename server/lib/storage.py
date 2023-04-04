@@ -27,10 +27,8 @@ if not os.path.exists(os.path.join(APP_DIR, 'models.json')):
     #check if pkg_resources is available
 
     if not pkg_resources.is_resource('server', 'models.json'):
-        print("Reading file from local folder")
         models_json = open('./models.json').read()
     else:
-        print("Read file from package")
         models_json = pkg_resources.read_text('server', 'models.json')
     
     with open(os.path.join(APP_DIR, 'models.json'), 'w') as f:
@@ -144,7 +142,13 @@ class Storage:
         self.event_emitter.emit(EVENTS.PROVIDER_API_KEY_UPDATE, provider_name)
     
     def __update___(self, event: str, *args, **kwargs):
-        print(f"Updating models.json file due to {event}")
+        if event == EVENTS.MODEL_ADDED:
+            model = args[0]
+            self.models.append(model)
+        elif event == EVENTS.MODEL_REMOVED:
+            model = args[0]
+            self.models.remove(model)
+       
         self.__save__()
 
     def update_model(self, model_name: str, model: Model):
@@ -160,14 +164,12 @@ class Storage:
                         provider.models[i] = model
                         break              
                 break
-        print("Emitting model updated event")
         self.event_emitter.emit(EVENTS.MODEL_UPDATED, model)
 
     def __save__(self):
         '''
         Saves the models.json file
         '''
-        print("Saving file to disk")
         logger.info('Saving models.json')
         new_json = {}
         for provider in self.providers:

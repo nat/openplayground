@@ -72,7 +72,7 @@ def provider_toggle_model(provider_name, model_name):
         model = Model(
             name=model_name,
             provider=provider_name,
-            status='pending',
+            status="ready" if provider.remote_inference else "pending",
             enabled=True,
             parameters=provider.default_parameters
         )
