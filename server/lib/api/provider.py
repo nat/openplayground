@@ -71,6 +71,7 @@ def provider_toggle_model(provider_name, model_name):
     if model is None:
         model = Model(
             name=model_name,
+            capabilities=provider.default_capabilities,
             provider=provider_name,
             status="ready" if provider.remote_inference else "pending",
             enabled=True,

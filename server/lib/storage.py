@@ -61,6 +61,7 @@ class Storage:
             models = [
                 Model(
                     model_name,
+                    model['capabilities'],
                     model['enabled'],
                     provider_name,
                     model['status'],
@@ -73,6 +74,7 @@ class Storage:
                     provider_name,
                     models,
                     provider.get('remoteInference', None),
+                    provider.get('defaultCapabilities', []),
                     provider.get('defaultParameters', None),
                     os.environ.get(f'{provider_name.upper()}_API_KEY'),
                     provider['requiresAPIKey'],
@@ -176,6 +178,7 @@ class Storage:
             provider.name: {
                 'models': {
                     model.name: {
+                        'capabilities': model.capabilities,
                         'enabled': model.enabled,
                         'status': model.status,
                         'parameters': model.parameters,
