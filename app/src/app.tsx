@@ -433,14 +433,17 @@ const PlaygroundContextWrapper = ({page, children}) => {
 
   const debouncedSettingsSave = useDebounce(saveSettings, 3000);
 
-  const setEditorContext = (newEditorContext) => {
-    //console.warn("Setting the editor....", newEditorContext)
+  const setEditorContext = (newEditorContext, immediate=false) => {
     SETTINGS.pages[page].editor = {...SETTINGS.pages[page].editor, ...newEditorContext};
 
     const _editor = {...SETTINGS.pages[page].editor, internalState: null };
 
     _setEditorContext(_editor);
-    debouncedSettingsSave()
+    if (immediate) {
+      saveSettings()
+    } else {
+      debouncedSettingsSave()
+    }
   }
 
   const setParametersContext = (newParameters) => {
