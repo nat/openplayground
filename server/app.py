@@ -204,6 +204,7 @@ class DownloadManager:
                 else:
                     model = Model(
                         name=repo_id,
+                        capabilities=hugging_face_local.default_capabilities,
                         provider="huggingface-local",
                         status="ready",
                         enabled=True,

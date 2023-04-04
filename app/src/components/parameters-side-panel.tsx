@@ -513,6 +513,42 @@ const ParametersSidePanel = ({ showModelDropdown, showModelList }) => {
     )
   }
 
+  const generate_show_probabilities = () => {
+    const selectedModel = modelsStateContext.find((modelState) => modelState.selected)
+    if (!selectedModel || !selectedModel.capabilities || !selectedModel.capabilities.includes("logprobs"))
+      return null
+   
+    return (
+      <Tooltip delayDuration={300} skipDelayDuration={150}>
+        <TooltipTrigger asChild>
+          <div className="cursor-default flex justify-between align-middle inline-block align-middle mb-1">
+            <p className="text-sm font-normal float-left align-text-top">
+              Show Probabilities
+            </p>
+            <Checkbox
+              name="show-probabilities"
+              className="float-right self-center"
+              checked={parametersContext.showProbabilities}
+              onCheckedChange={(val: boolean) => {
+                setParametersContext({
+                  ...parametersContext,
+                  showProbabilities: val,
+                })
+              }}
+            />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side={isLg ? "left" : "bottom"}>
+          <p>
+            When enabled hover over generated words <br /> to see how likely a
+            token was to be generated,
+            <br /> if the model supports it.
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
   return (
     <div className="flex flex-col max-h-[100%] pt-4 sm:pt-4 md:pt-[0px] lg:pt-[0px]">
       <div className="mb-2">
@@ -551,33 +587,7 @@ const ParametersSidePanel = ({ showModelDropdown, showModelList }) => {
           }
         />
 
-        <Tooltip delayDuration={300} skipDelayDuration={150}>
-          <TooltipTrigger asChild>
-            <div className="cursor-default flex justify-between align-middle inline-block align-middle mb-1">
-              <p className="text-sm font-normal float-left align-text-top">
-                Show Probabilities
-              </p>
-              <Checkbox
-                name="show-probabilities"
-                className="float-right self-center"
-                checked={parametersContext.showProbabilities}
-                onCheckedChange={(val: boolean) => {
-                  setParametersContext({
-                    ...parametersContext,
-                    showProbabilities: val,
-                  })
-                }}
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side={isLg ? "left" : "bottom"}>
-            <p>
-              When enabled hover over generated words <br /> to see how likely a
-              token was to be generated,
-              <br /> if the model supports it.
-            </p>
-          </TooltipContent>
-        </Tooltip>
+        {generate_show_probabilities()}
 
         <Tooltip delayDuration={300} skipDelayDuration={150}>
           <TooltipTrigger asChild>
