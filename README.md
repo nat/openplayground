@@ -31,7 +31,7 @@ This runs a Flask process, so you can add the typical flags such as setting a di
 ```sh
 $ git clone https://github.com/nat/openplayground
 $ cd app && npm install && npx parcel watch src/index.html --no-cache
-$ cd server && pip3 install -r requirements.txt && cd .. && python -m server.app
+$ cd server && pip3 install -r requirements.txt && cd .. && python3 -m server.app
 ```
 
 ## Ideas for contributions
