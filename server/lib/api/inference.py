@@ -74,7 +74,7 @@ def stream_inference():
             required_parameters = ["temperature", "topP", "topK", "repetitionPenalty", "maximumLength", "stopSequences"]
         elif provider == "llama-local":
             name = name.removeprefix("llama-local:")
-            required_parameters = ["temperature"]
+            required_parameters = ["temperature", "topP", "repetitionPenalty", "maximumLength", "stopSequences"]
         elif provider == "huggingface-local":
             name = name.removeprefix("huggingface-local:")
             required_parameters = ["temperature", "topP",  "topK", "repetitionPenalty", "maximumLength"]

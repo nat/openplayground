@@ -15,6 +15,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Callable, Union
 from .huggingface.hf import HFInference
+from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -191,7 +192,7 @@ class InferenceManager:
                 logger.error(f"Error parsing response from API: {e}")
         except Exception as e:
             infer_result.token = f"[ERROR] {e}"
-            logger.error(f"Error: {e}")
+            logger.exception(f"Error: {e}")
         finally:
             if infer_result.token is None:
                 infer_result.token = "[COMPLETED]"
@@ -596,6 +597,41 @@ class InferenceManager:
 
     def local_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
        self.__error_handler__(self.__local_text_generation__, provider_details, inference_request)
+    
+    def __local_text_generation_llama__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        cancelled = False
+        env_modle_bin_path = inference_request.model_name.upper() + '_MODEL_BIN_PATH'
+        llama_modlel_path = os.environ.get(env_modle_bin_path)
+        if not llama_modlel_path:
+            logger.error(f"please add {env_modle_bin_path} to the dot env file of environment variable!")
+            return
+        llm = Llama(model_path=llama_modlel_path)
+        stream = llm(
+            f"Question: {inference_request.prompt} Answer: ",
+            max_tokens=inference_request.model_parameters['maximumLength'],
+            temperature=float(inference_request.model_parameters['temperature']),
+            top_p=float(inference_request.model_parameters['topP']),
+            repeat_penalty=float(inference_request.model_parameters['repetitionPenalty']),
+            stop=inference_request.model_parameters['stopSequences'],
+            stream=True,
+        )
+        for output in stream:
+            if cancelled: break
+            infer_response = InferenceResult(
+                uuid=inference_request.uuid,
+                model_name=inference_request.model_name,
+                model_tag=inference_request.model_tag,
+                model_provider=inference_request.model_provider,
+                token=output['choices'][0]['text'],
+                probability=None,
+                top_n_distribution=None
+            )
+            if not self.announcer.announce(infer_response, event="infer"):
+                cancelled = True
+                logger.info(f"Cancelled inference for {inference_request.uuid} - {inference_request.model_name}")
+
+    def local_text_generation_llama(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+       self.__error_handler__(self.__local_text_generation_llama__, provider_details, inference_request)
     
     def __anthropic_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         c = anthropic.Client(provider_details.api_key)

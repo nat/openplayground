@@ -606,8 +606,6 @@
   "llama-local": {
     "requiresAPIKey": false,
     "remoteInference": false,
-    "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model",
-    "defaultMeta": [],
     "defaultParameters": {
       "temperature": {
         "value": 1,
@@ -630,33 +628,55 @@
           1
         ]
       },
-      "topK": {
-        "value": 1,
-        "range": [
-          1,
-          500
-        ]
-      },
       "repetitionPenalty": {
         "value": 1,
         "range": [
           0,
           2
         ]
+      },
+      "stopSequences": {
+        "value": ["Question:", "\n"],
+        "range": []
       }
     },
     "models" : {
       "llama-7b": {
-          "enabled": false,
+          "enabled": true,
           "status": "ready",
           "parameters": {
-              "temperature": {
-                  "value": 0.5,
-                  "range": [
-                      0.1,
-                      1.0
-                  ]
-              }
+            "temperature": {
+              "value": 1,
+              "range": [
+                0.1,
+                1
+              ]
+            },
+            "maximumLength": {
+              "value": 200,
+              "range": [
+                50,
+                1024
+              ]
+            },
+            "topP": {
+              "value": 1,
+              "range": [
+                0.1,
+                1
+              ]
+            },
+            "repetitionPenalty": {
+              "value": 1,
+              "range": [
+                0,
+                2
+              ]
+            },
+            "stopSequences": {
+              "value": ["Question:", "\n"],
+              "range": []
+            }
           }
       }
   }
