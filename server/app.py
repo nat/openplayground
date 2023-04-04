@@ -5,11 +5,13 @@ import warnings
 import io
 import queue
 import sys
+from pathlib import Path
 import json
 import threading
 import time
 import re
 
+from server.lib.entities import Model, Provider
 from server.lib.inference import ProviderDetails, InferenceManager, InferenceRequest
 from server.lib.event_emitter import EventEmitter, EVENTS
 from server.lib.storage import Storage
@@ -30,7 +32,6 @@ warnings.formatwarning = warning_on_one_line
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
 
 app = Flask(__name__)
 
@@ -189,6 +190,26 @@ class DownloadManager:
             if model.status == 'pending':
                 print(model)
                 self.model_queue.put(model)
+
+        # TODO: In the future it might make sense to have local provider specific instances
+        cache_info = scan_cache_dir()
+        hugging_face_local = self.storage.get_provider("huggingface-local")
+ 
+        for repo_info in cache_info.repos:
+            repo_id = repo_info.repo_id
+            repo_type = repo_info.repo_type
+            if repo_type == "model":
+                if hugging_face_local.has_model(repo_id):
+                    continue
+                else:
+                    model = Model(
+                        name=repo_id,
+                        provider="huggingface-local",
+                        status="ready",
+                        enabled=True,
+                        parameters=hugging_face_local.default_parameters
+                    )
+                    hugging_face_local.add_model(model)
 
         t = threading.Thread(target=self.__download_loop__)
         t.start()
