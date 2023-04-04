@@ -49,6 +49,8 @@ class Storage:
 
         if env_file_path is None:
             self.env_file_path = os.path.join(os.getcwd(), 'env')
+        elif not os.path.exists(env_file_path):
+            raise Exception(f'env file {env_file_path} does not exist')
         else:
             load_dotenv(env_file_path)
 
