@@ -54,10 +54,7 @@ class Provider:
         self.search_url = search_url
     
     def has_model(self, model_name: str) -> bool:
-        for model in self.models:
-            if model.name == model_name:
-                return True
-        return False
+        return any(model.name == model_name for model in self.models)
     
     def get_model(self, model_name: str) -> Model:
         for model in self.models:

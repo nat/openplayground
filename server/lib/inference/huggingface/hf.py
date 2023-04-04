@@ -29,7 +29,7 @@ class HFInference:
         self.model, self.tokenizer = self.load_model(model_name)
 
     # Helper function to load model from transformers library
-    def load_model(self, model_name: str)-> tuple([PreTrainedModel, PreTrainedTokenizer]):
+    def load_model(self, model_name: str) -> (PreTrainedModel, PreTrainedTokenizer):
         '''
         Load model from transformers library
         dynamically instantiates the right model class for text generation from model config architecture
@@ -39,13 +39,12 @@ class HFInference:
         model_class = getattr(MODULE, config.architectures[0]) # get model class from config
         model = model_class.from_pretrained(model_name, config=config) # dynamically load right model class for text generation
 
-        param_size = 0
-        for param in model.parameters():
-            param_size += param.nelement() * param.element_size()
-        buffer_size = 0
-        for buffer in model.buffers():
-            buffer_size += buffer.nelement() * buffer.element_size()
-
+        param_size = sum(
+            param.nelement() * param.element_size() for param in model.parameters()
+        )
+        buffer_size = sum(
+            buffer.nelement() * buffer.element_size() for buffer in model.buffers()
+        )
         size_all_mb = (param_size + buffer_size) / 1024**2
         logger.info('model size: {:.3f}MB'.format(size_all_mb))
 
@@ -58,7 +57,7 @@ class HFInference:
 
         if size_all_mb > device_memory * 0.95: #some padding
             raise Exception('Model size is too large for host to run inference on')
-        
+
         model.to(DEVICE) # gpu inference if possible
         return model, tokenizer
 
@@ -93,16 +92,16 @@ class HFInference:
             )
         except Exception as e:
             raise Exception(f"Error generating text: {e}")
-        
+
         curr_token = ""
         sentence = "<|endoftext|>"
         first_token = True
         for output in outputs:
             next_token = output
             if len(next_token.size()) > 1: continue # skip the last generated full array
-            curr = self.tokenizer.convert_ids_to_tokens(next_token, skip_special_tokens=True)
-        
-            if (curr):
+            if curr := self.tokenizer.convert_ids_to_tokens(
+                next_token, skip_special_tokens=True
+            ):
                 curr = curr[0] # string with special character potentially
                 if (curr[0] == "Ġ"): # BPE tokenizer
                     curr_token = curr_token.replace("Ċ", "\n")
@@ -123,7 +122,7 @@ class HFInference:
                     curr_token = curr_token.replace("Ċ", "\n")
                     yield curr_token
                     sentence += curr_token
-                
+
                 curr_token = ""
 
         # dispatch last token, if we can

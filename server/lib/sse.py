@@ -147,7 +147,6 @@ class ServerSentEventsBlueprint(Blueprint):
                     yield Message(**msg_dict)
         except GeneratorExit:
             logger.error("GeneratorExit")
-            pass
         finally:
             logger.info(f"Unsubscribing from channel: {channel}")
             try:

@@ -37,7 +37,7 @@ app = Flask(__name__)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    if path == "" or not os.path.exists(app.static_folder + '/' + path):
+    if path == "" or not os.path.exists(f'{app.static_folder}/{path}'):
         path = 'index.html'
 
     return send_from_directory(app.static_folder, path)
@@ -72,23 +72,21 @@ class MonitorThread(threading.Thread):
                 for line in lines:
                     if line == "":
                         continue
-                    
+
                     if line.startswith("Downloading shards:"):
-                        progress = re.search(r"\| (\d+)/(\d+) \[", line)
-                        if progress:
-                            current_shard, total_shards = int(progress.group(1)), int(progress.group(2))
+                        if progress := re.search(r"\| (\d+)/(\d+) \[", line):
+                            current_shard, total_shards = int(progress[1]), int(progress[2])
                     elif line.startswith("Downloading"):
                         percentage = re.search(r":\s+(\d+)%", line)
-                        percentage = percentage.group(0)[2:] if percentage else ""
+                        percentage = percentage[0][2:] if percentage else ""
 
                         progress = re.search(r"\[(.*?)\]", line)
-                        if progress and "?" not in progress.group(0):
-                            current_duration, rest = progress.group(0)[1:-1].split("<")
+                        if progress and "?" not in progress[0]:
+                            current_duration, rest = progress[0][1:-1].split("<")
                             total_duration, speed = rest.split(",")
 
-                            download_size = re.search(r"\| (.*?)\[", line)
-                            if download_size:
-                                current_size, total_size = download_size.group(0)[2:-1].strip().split("/")
+                            if download_size := re.search(r"\| (.*?)\[", line):
+                                current_size, total_size = download_size[0][2:-1].strip().split("/")
 
                             self.event_emitter.emit(EVENTS.MODEL_DOWNLOAD_UPDATE, self.model, {
                                 'current_shard': current_shard,
