@@ -188,7 +188,6 @@ class DownloadManager:
 
         for model in models:
             if model.status == 'pending':
-                print(model)
                 self.model_queue.put(model)
 
         # TODO: In the future it might make sense to have local provider specific instances
@@ -207,7 +206,7 @@ class DownloadManager:
                         capabilities=hugging_face_local.default_capabilities,
                         provider="huggingface-local",
                         status="ready",
-                        enabled=True,
+                        enabled=False,
                         parameters=hugging_face_local.default_parameters
                     )
                     hugging_face_local.add_model(model)
@@ -227,12 +226,9 @@ class DownloadManager:
                 output_buffer = io.StringIO()
                 model = self.model_queue.get(block=False)
 
-                print(f"Should download {model.name} from {model.provider}")
-               
                 monitor_thread =  MonitorThread(model, output_buffer)
-
                 monitor_thread.start()
-                print("About to start downloading")
+
                 sys.stderr = output_buffer
                 sys.stdout = output_buffer
                 _ = AutoTokenizer.from_pretrained(model.name)
@@ -312,17 +308,73 @@ def cli():
     pass
 
 @click.command()
-@click.option('--host',  '-h', default='localhost', help='The host to bind to [default: localhost]')
-@click.option('--port', '-p', default=5432, help='The port to bind to [default: 5432]')
-@click.option('--debug/--no-debug', default=False, help='Set flask to debug mode')
-@click.option('--env', '-e', default=".env", help='Environment file to read and store API keys')
-@click.option('--models', '-m', default=None, help='Config file containing model information')
+@click.help_option('-h', '--help')
+@click.option('--host',  '-h', default='localhost', help='The host to bind to. Default: localhost.')
+@click.option('--port', '-p', default=5432, help='The port to bind to. Default: 5432.')
+@click.option('--debug/--no-debug', default=False, help='Enable or disable Flask debug mode. Default: False.')
+@click.option('--env', '-e', default=".env", help='Path to the environment file for storing and reading API keys. Default: .env.')
+@click.option('--models', '-m', default=None, help='Path to the configuration file for loading models. Default: None.')
 def run(host, port, debug, env, models):
+    """
+    Run the OpenPlayground server.
+
+    This command starts the OpenPlayground server with the specified options.
+
+    Arguments:
+    --host, -h: The host to bind to. Default: localhost.
+    --port, -p: The port to bind to. Default: 5432.
+    --debug/--no-debug: Enable or disable Flask debug mode. Default: False.
+    --env, -e: Path to the environment file for storing and reading API keys. Default: .env.
+    --models, -m: Path to the configuration file for loading models. Default: None.
+
+    Example usage:
+
+    $ openplayground run --host=0.0.0.0 --port=8080 --debug --env=keys.env --models=models.json
+    """
     storage = Storage(models, env)
     app.config['GLOBAL_STATE'] = GlobalStateManager(storage)
 
     app.run(host=host, port=port, debug=debug)
 
+@click.command()
+@click.help_option('-h', '--help')
+@click.option('--input', '-i', default=None, help='Path to the configuration file for importing models')
+def import_config(input):
+    """
+    Import configuration settings.
+
+    This command imports configuration settings for one or more models from a file.
+
+    Arguments:
+    --input, -i: Path to the configuration file for importing models. Default: None.
+
+    Example usage:
+
+    $ openplayground import-config --input=/path/to/config.json
+    """
+    Storage.import_config(input)
+
+@click.command()
+@click.help_option('-h', '--help')
+@click.option('--output', '-o', default=None, help='Output file path for the exported configuration settings')
+@click.pass_context
+def export_config(ctx, output):
+    """
+    Export configuration settings.
+
+    This command exports the current configuration settings to a file.
+
+    Arguments:
+    --output, -o: Output file path for the exported configuration settings. Default: None.
+
+    Example usage:
+
+    $ openplayground export-config --output=/path/to/config.json
+    """
+    Storage.export_config(output)
+
+cli.add_command(export_config)
+cli.add_command(import_config)
 cli.add_command(run)
 
 if __name__ == '__main__':
