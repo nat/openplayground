@@ -3,9 +3,9 @@ import json
 import requests
 
 from .response_utils import create_response_message
-from ..entities import Model, ModelEncoder, Provider
+from ..entities import Model, ModelEncoder
 
-from flask import g, request, jsonify, jsonify, Blueprint, current_app
+from flask import g, request, jsonify, Blueprint, current_app
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -27,7 +27,6 @@ def verify_provider():
     if provider is None:
         return create_response_message(f"Invalid provider: {provider_name}", 400)
     
-    print(f"provider: {provider}")
     if not provider.search_url and (model_name and not provider.has_model(model_name)):
         return create_response_message(f"Invalid model: {model_name}", 400)
     
@@ -139,7 +138,3 @@ def provider_update_api_key(provider_name):
     response = jsonify({'status': 'success'})
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
-
-@provider_bp.route('/<string:provider_name>/search-models/<string:model_name_pattern>', methods=['GET'])
-def provider_search_model(provider_name, model_name_pattern):
-    pass
