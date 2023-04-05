@@ -1,5 +1,5 @@
 import React, { useEffect } from "react"
-import {Playground, Compare, Settings} from "./pages"
+import {Playground, Compare, Chat, Settings} from "./pages"
 import {SSE} from "sse.js"
 import {
   EditorState,
@@ -622,6 +622,18 @@ function ProviderWithRoutes() {
               <Compare/>
               <Toaster />
             </PlaygroundContextWrapper>
+          </APIContextWrapper>
+        }
+      />
+
+      <Route
+        path="/chat"
+        element={
+          <APIContextWrapper>
+            {/* <PlaygroundContextWrapper key = "chat" page = "chat"> */}
+              <Chat/>
+              {/* <Toaster /> */}
+            {/* </PlaygroundContextWrapper> */}
           </APIContextWrapper>
         }
       />
