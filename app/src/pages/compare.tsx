@@ -568,10 +568,10 @@ function PromptArea({showDialog}) {
       }
     }
 
-    apiContext.subscribeCompletion(completion_callback)
+    apiContext.Inference.subscribeTextCompletion(completion_callback)
 
     return () => {
-      apiContext.unsubscribeCompletion(completion_callback);
+      apiContext.Inference.unsubscribeTextCompletion(completion_callback);
     };
   }, []);
 
@@ -590,7 +590,7 @@ function PromptArea({showDialog}) {
       prePrompt: prompt
     })
 
-    const _cancel_callback = apiContext.completionRequest({
+    const _cancel_callback = apiContext.Inference.textCompletionRequest({
       prompt: regenerate ? passedInPrompt : prompt,
       models: modelsStateContext.map((modelState) => {
         if(modelState.enabled) {
@@ -792,10 +792,10 @@ const ModelsCompletion = ({showDialog}) => {
       }
     }
 
-    apiContext.subscribeCompletion(completion_callback)
+    apiContext.Inference.subscribeTextCompletion(completion_callback)
 
     return () => {
-      apiContext.unsubscribeCompletion(completion_callback);
+      apiContext.Inference.unsubscribeTextCompletion(completion_callback);
     };
   }, []);
 

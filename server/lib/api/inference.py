@@ -20,7 +20,7 @@ inference_bp = Blueprint('inference', __name__, url_prefix='/inference')
 def set_app_context():
     g.app = current_app
 
-@inference_bp.route("/stream", methods=["POST"])
+@inference_bp.route("/text/stream", methods=["POST"])
 def stream_inference():
     data = request.get_json(force=True)
     logger.info(f"Path: {request.path}, Request: {data}")

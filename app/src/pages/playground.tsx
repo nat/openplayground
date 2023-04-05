@@ -351,7 +351,7 @@ const PromptCompletionEditor = ({showDialog}) => {
       previousInternalState: convertToRaw(editorState.getCurrentContent())
     })
 
-    const _cancel_callback = apiContext.completionRequest({
+    const _cancel_callback = apiContext.Inference.textCompletionRequest({
       prompt: regenerate ? passedInPrompt : prompt,
       models: modelsStateContext.map((modelState) => {
         if(modelState.selected) {
@@ -436,10 +436,10 @@ const PromptCompletionEditor = ({showDialog}) => {
       }
     }
     
-    apiContext.subscribeCompletion(completionCallback)
+    apiContext.Inference.subscribeTextCompletion(completionCallback)
 
     return () => {
-      apiContext.unsubscribeCompletion(completionCallback);
+      apiContext.Inference.unsubscribeTextCompletion(completionCallback);
     };
   }, []);
 

@@ -321,7 +321,7 @@ export default function Settings() {
 
   useEffect(() => {
     const preloadData = async () => {
-      const providersWithModels: { [key: string]: Provider } = await apiContext.providersWithModels()
+      const providersWithModels: { [key: string]: Provider } = await apiContext.Provider.getAllWithModels()
 
       const _enabledModels = Object.entries(providersWithModels)
         .map(([_, provider]: [string, Provider]) => provider.models.filter(({enabled}: {enabled: boolean}) => enabled))
@@ -357,10 +357,10 @@ export default function Settings() {
       }
     }
     
-    apiContext.subscribeNotifications(notificationCallback)
+    apiContext.Notifications.subscribe(notificationCallback)
     preloadData().catch(console.error)
     return () => {
-      apiContext.unsubscribeCompletion(notificationCallback);
+      apiContext.Notifications.unsubscribe(notificationCallback);
     };
   }, []);
 
@@ -380,7 +380,7 @@ export default function Settings() {
 
   const setAPIKey = async (apiKey: string ) => { 
     try {
-      await apiContext.setAPIKey(providerName, apiKey);
+      await apiContext.Provider.setAPIKey(providerName, apiKey);
 
       toast({
         title: "API Key Saved",
@@ -404,7 +404,7 @@ export default function Settings() {
 
   const toggleModel = async (providerName: string, modelName: string) => {
     try {
-      const {enabled, model} = await apiContext.toggleModel(providerName, modelName);
+      const {enabled, model} = await apiContext.Model.toggle(providerName, modelName);
      
       const providerModel = providers[providerName].models.find((m) => m.name === modelName)
       if (providerModel) {
@@ -442,7 +442,7 @@ export default function Settings() {
 
   const searchProviderModels = async (providerName: string, searchTerm: string) => {
     try {
-      const models = await apiContext.searchModels(providerName, searchTerm);
+      const models = await apiContext.Model.search(providerName, searchTerm);
 
       setProviderSearchResults(models.map((model: any) => model.name))
     } catch (error) {

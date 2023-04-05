@@ -80,11 +80,7 @@ try {
 DEFAULT_CONTEXTS.PAGES = SETTINGS.pages;
 DEFAULT_CONTEXTS.MODELS = SETTINGS.models;
 
-//Remove me soon
-export const ModelContext = React.createContext({});
-
 export const APIContext = React.createContext({});
-
 export const EditorContext = React.createContext({});
 export const ModelsStateContext = React.createContext([]);
 export const ParametersContext = React.createContext({});
@@ -153,9 +149,10 @@ function useDebounce(func, delay) {
 
 const APIContextWrapper = ({children}) => {
   const pendingCompletionRequest = React.useRef(false);
-  const apiSubscribers = React.useRef([]);
+  const textCompletionSubscribers = React.useRef([]);
+  const chatCompletionSubscribers = React.useRef([]);
   const notificationSubscribers = React.useRef([]);
-  
+
   useEffect(() => {
     const sse_request = new SSE("/api/notifications")
     
@@ -168,149 +165,178 @@ const APIContextWrapper = ({children}) => {
     sse_request.stream();
   }, [])
 
-  const [apiContext, _] = React.useState({
-    subscribeCompletion: (callback) => {
-      apiSubscribers.current.push(callback);
-    },
-    unsubscribeCompletion: (callback) => {
-      apiSubscribers.current = apiSubscribers.current.filter((cb) => cb !== callback);
-    },
-    completionRequest: ({prompt, models}) => {
-      pendingCompletionRequest.current = true;
-      let sse_request = null;
+  const Model = {
+    getAll: async () => (await fetch("/api/models")).json(),
+    getAllEnabled: async () => (await fetch("/api/models-enabled")).json(),
+    toggle: async (provider, model) => (await fetch(`/api/provider/${provider}/model/${encodeURIComponent(model)}/toggle-status`)).json(),
+    search: async (provider, query) => (await fetch(`/api/provider/${provider}/models/search?query=${query}`)).json(),
+  };
 
-      function beforeUnloadHandler() {
-        if (sse_request) sse_request.close()
-      }
-
-      window.addEventListener('beforeunload', beforeUnloadHandler);
- 
-      const completionsBuffer = {};
-      let error_occured = false;
-      let request_complete = false;
-      sse_request = new SSE(
-        "/api/inference/stream",
-        {
-          payload: JSON.stringify({
-          prompt: prompt,
-          models: models.map((model) => {
-            completionsBuffer[model.tag] = [];
-            return model
-          }),
-        })
-        }
-      )
-          
-      apiSubscribers.current.forEach((callback) => callback({
-        "event": "open"
-      }))
-
-      sse_request.onopen = async () => {
-        const bulk_write = () => {
-          setTimeout(() => {
-            let newTokens = false;
-            let batchUpdate = {};
-                
-            for (let modelTag in completionsBuffer) {
-              if (completionsBuffer[modelTag].length > 0) {
-                newTokens = true;
-                batchUpdate[modelTag] = completionsBuffer[modelTag].splice(0, completionsBuffer[modelTag].length)
-              }
-            }
-      
-            if (newTokens) {
-              apiSubscribers.current.forEach((callback) => callback({
-                event: "completion",
-                data: batchUpdate
-              }));
-            }
-
-            if (!request_complete) bulk_write();
-          }, 20)
-        };
-        bulk_write();
-      }
-
-      sse_request.addEventListener("infer", (event: any) => {
-        let resp = JSON.parse(event.data)
-        completionsBuffer[resp.modelTag].push(resp)
-      });
-      
-      sse_request.addEventListener("status", (event: any) => {
-        apiSubscribers.current.forEach((callback) => callback({
-          event: "status",
-          data: JSON.parse(event.data)
-        }))
-      });
-      
-      const close_sse = () => {
-        request_complete = true;
-        apiSubscribers.current.forEach((callback) => callback({
-          "event": "close",
-          "meta": {error: error_occured}
-        }))
-        window.removeEventListener('beforeunload', beforeUnloadHandler);
-      }
-      
-      sse_request.addEventListener("error", (event) => {
-        error_occured = true;
-        try {
-          const message = JSON.parse(event.data)
-
-          apiSubscribers.current.forEach((callback) => callback({
-            "event": "error",
-            "data": message.status 
-          }))
-        } catch (e) {
-          apiSubscribers.current.forEach((callback) => callback({
-            "event": "error",
-            "data": "Unknown error"
-          }))
-        }
-              
-        close_sse();
-      });
-      
-      sse_request.addEventListener("abort", () => {
-        error_occured = true;
-        close_sse();
-      });
-      
-      sse_request.addEventListener("readystatechange", (event: any) => {
-        if (event.readyState === 2) close_sse();
-      });
-      
-      sse_request.stream();
- 
-      const cancel_callback = () => {
-        apiSubscribers.current.forEach((callback: CallableFunction) => callback({
-          "event": "cancel",
-        }))
-
-        if (sse_request) sse_request.close();
-      }
-
-      return cancel_callback;
-    },
-    cancelCompletionRequest: () => {
-      pendingCompletionRequest.current = false;
-    },
-    subscribeNotifications: (callback) => {
+  const Notifications = {
+    subscribe: (callback) => {
       notificationSubscribers.current.push(callback);
     },
-    unsubscribeNotifications: (callback) => {
+    unsubscribe: (callback) => {
       notificationSubscribers.current = notificationSubscribers.current.filter((cb) => cb !== callback);
     },
+  };
+  
+  const Provider = {
     setAPIKey: async (provider, apiKey) => (await fetch(`/api/provider/${provider}/api-key`, {method: "PUT", headers: {"Content-Type": "application/json"}, 
       body: JSON.stringify({apiKey: apiKey})}
     )).json(),
-    toggleModel: async (provider, model) => (await fetch(`/api/provider/${provider}/model/${encodeURIComponent(model)}/toggle-status`)).json(),
-    allModels:  async () => (await fetch("/api/models")).json(),
-    enabledModels: async () => (await fetch("/api/models-enabled")).json(),
-    providers: async () => (await fetch("/api/providers")).json(),
-    providersWithModels: async () => (await fetch("/api/providers-with-key-and-models")).json(),
-    searchModels: async (provider, query) => (await fetch(`/api/provider/${provider}/models/search?query=${query}`)).json(),
+    getAll: async () => (await fetch("/api/providers")).json(),
+    getAllWithModels: async () => (await fetch("/api/providers-with-key-and-models")).json(),
+  };
+  
+  const Inference = {
+    subscribeTextCompletion: (callback) => {
+      textCompletionSubscribers.current.push(callback);
+    },
+    unsubscribeTextCompletion: (callback) => {
+      textCompletionSubscribers.current = textCompletionSubscribers.current.filter((cb) => cb !== callback);
+    },
+    textCompletionRequest: createTextCompletionRequest,
+    subscribeChatCompletion: (callback) => {
+      chatCompletionSubscribers.current.push(callback);
+    },
+    unsubscribeChatCompletion: (callback) => {
+      chatCompletionSubscribers.current = chatCompletionSubscribers.current.filter((cb) => cb !== callback);
+    },
+    chatCompletion: createChatCompletionRequest,
+  };
+  
+  const [apiContext, _] = React.useState({
+    Model,
+    Notifications,
+    Provider,
+    Inference,
   });
+  
+  function createTextCompletionRequest({prompt, models}) {
+    const url = "/api/inference/text/stream";
+    const payload = {
+      prompt: prompt,
+      models: models,
+    };
+    return createCompletionRequest(url, payload, textCompletionSubscribers);
+  }
+  
+  function createChatCompletionRequest(prompt, model) {
+    const url = "/api/inference/chat/stream";
+    const payload = {prompt, model};
+    return createCompletionRequest(url, payload, chatCompletionSubscribers);
+  }
+  
+  function createCompletionRequest(url, payload, subscribers) {
+    pendingCompletionRequest.current = true;
+    let sse_request = null;
+  
+    function beforeUnloadHandler() {
+      if (sse_request) sse_request.close();
+    }
+  
+    window.addEventListener("beforeunload", beforeUnloadHandler);
+    const completionsBuffer = createCompletionsBuffer(payload.models);
+    let error_occured = false;
+    let request_complete = false;
+  
+    sse_request = new SSE(url, {payload: JSON.stringify(payload)});
+  
+    bindSSEEvents(sse_request, completionsBuffer, {error_occured, request_complete}, beforeUnloadHandler, subscribers);
+  
+    return () => {
+      if (sse_request) sse_request.close();
+    };
+  }
+
+  function createCompletionsBuffer(models) {
+    const buffer = {};
+    models.forEach((model) => {
+      buffer[model.tag] = [];
+    });
+    return buffer;
+  }
+  
+  function bindSSEEvents(sse_request, completionsBuffer, requestState, beforeUnloadHandler, subscribers) {
+    sse_request.onopen = async () => {
+      bulkWrite(completionsBuffer, requestState, subscribers);
+    };
+  
+    sse_request.addEventListener("infer", (event) => {
+      let resp = JSON.parse(event.data);
+      completionsBuffer[resp.modelTag].push(resp);
+    });
+  
+    sse_request.addEventListener("status", (event) => {
+      subscribers.current.forEach((callback) => callback({
+        event: "status",
+        data: JSON.parse(event.data)
+      }));
+    });
+  
+    sse_request.addEventListener("error", (event) => {
+      requestState.error_occured = true;
+      try {
+        const message = JSON.parse(event.data);
+  
+        subscribers.current.forEach((callback) => callback({
+          "event": "error",
+          "data": message.status 
+        }));
+      } catch (e) {
+        subscribers.current.forEach((callback) => callback({
+          "event": "error",
+          "data": "Unknown error"
+        }));
+      }
+  
+      close_sse(sse_request, requestState, beforeUnloadHandler, subscribers);
+    });
+  
+    sse_request.addEventListener("abort", () => {
+      requestState.error_occured = true;
+      close_sse(sse_request, requestState, beforeUnloadHandler, subscribers);
+    });
+  
+    sse_request.addEventListener("readystatechange", (event) => {
+      if (event.readyState === 2) close_sse(sse_request, requestState, beforeUnloadHandler, subscribers);
+    });
+  
+    sse_request.stream();
+  }
+
+  function close_sse(sse_request, requestState, beforeUnloadHandler, subscribers) {
+    requestState.request_complete = true;
+    subscribers.current.forEach((callback) => callback({
+      "event": "close",
+      "meta": {error: requestState.error_occured},
+    }));
+    window.removeEventListener("beforeunload", beforeUnloadHandler);
+  }  
+  
+  function bulkWrite(completionsBuffer, requestState, subscribers) {
+    setTimeout(() => {
+      let newTokens = false;
+      let batchUpdate = {};
+  
+      for (let modelTag in completionsBuffer) {
+        if (completionsBuffer[modelTag].length > 0) {
+          newTokens = true;
+          batchUpdate[modelTag] = completionsBuffer[modelTag].splice(0, completionsBuffer[modelTag].length);
+        }
+      }
+  
+      if (newTokens) {
+        subscribers.current.forEach((callback) => callback({
+          event: "completion",
+          data: batchUpdate,
+        }));
+      }
+  
+      if (!requestState.request_complete) bulkWrite(completionsBuffer, requestState, subscribers);
+    }, 20);
+  }
 
   return (
     <APIContext.Provider value={apiContext}>
@@ -374,15 +400,15 @@ const PlaygroundContextWrapper = ({page, children}) => {
       }
     }
     
-    apiContext.subscribeNotifications(notificationCallback)
+    apiContext.Notifications.subscribe(notificationCallback)
 
     return () => {
-      apiContext.unsubscribeCompletion(notificationCallback);
+      apiContext.Notifications.unsubscribe(notificationCallback);
     };
   }, []);
 
   const updateModelsData = async () => {
-    const json_params = await apiContext.enabledModels()
+    const json_params = await apiContext.Model.getAllEnabled()
     const models = {};
     
     const PAGE_MODELS_STATE = SETTINGS.pages[page].modelsState;
