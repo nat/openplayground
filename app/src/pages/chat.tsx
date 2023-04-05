@@ -1,7 +1,11 @@
 import React from "react"
 import NavBar from "../components/navbar"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import Message from "../components/chat/message"
+
+export interface IMessage {
+  author: string
+  content: string
+}
 
 const initialMessages = [
   { author: "me", content: "How do I set up a Node.js TypeScript project?" },
@@ -40,7 +44,7 @@ npm install --save-dev typescript
 
 This file specifies the TypeScript compiler options and tells it to compile all files in the src directory.`,
   },
-]
+] as IMessage[]
 
 export default function Chat() {
   const [messages, setMessages] = React.useState(initialMessages)
@@ -63,17 +67,8 @@ export default function Chat() {
       <div className="mx-auto flex flex-col flex-1">
         <div className="flex-1">
           {messages.map((message, index) => (
-            <div className="p-4">
-              <div className="flex gap-4">
-                <div className="bg-red-500 rounded h-8 w-8"></div>
-
-                <div className="prose">
-                  <ReactMarkdown
-                    children={message.content}
-                    remarkPlugins={[remarkGfm]}
-                  />
-                </div>
-              </div>
+            <div className="p-4" key={index}>
+              <Message message={message} />
             </div>
           ))}
         </div>
