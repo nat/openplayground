@@ -16,7 +16,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 # Set constants
 MODULE = importlib.import_module("transformers") # dynamic import of module class, AutoModel not good enough for text generation
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu" # suport gpu inference if possible
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu" # support gpu inference if possible
 
 logger = logging.getLogger(__name__)
 
