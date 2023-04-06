@@ -12,6 +12,7 @@ import {
   Editor,
   EditorState,
   convertFromRaw,
+  convertToRaw,
   CompositeDecorator,
   SelectionState,
   Modifier,
@@ -257,7 +258,7 @@ const ModelCard = forwardRef((props, ref) => {
       return <span data-offset-key={children[0].key}>{children}</span>
     }
   }
-
+  
   const getEditorState = useCallback((): EditorState => editorStateRef.current, [])
 
   const createDecorator = () => new CompositeDecorator([{
@@ -516,6 +517,16 @@ function PromptArea({showDialog}) {
   const {modelsStateContext} = useContext(ModelsStateContext)
   const {editorContext, setEditorContext} = useContext(EditorContext)
   
+  React.useEffect(() => {
+    return () => {
+      setEditorContext({
+        ...editorContext,
+        internalState: convertToRaw(editorStateRef.current.getCurrentContent()),
+        prompt: editorStateRef.current.getCurrentContent().getPlainText()
+      }, true)
+    }
+  }, []);
+
   const [editorState, setEditorState] = React.useState(
     EditorState.moveFocusToEnd(EditorState.createWithContent(
       editorContext.internalState !== null ? convertFromRaw(editorContext.internalState): ContentState.createFromText(editorContext.prompt)
@@ -557,10 +568,10 @@ function PromptArea({showDialog}) {
       }
     }
 
-    apiContext.subscribeCompletion(completion_callback)
+    apiContext.Inference.subscribeTextCompletion(completion_callback)
 
     return () => {
-      apiContext.unsubscribeCompletion(completion_callback);
+      apiContext.Inference.unsubscribeTextCompletion(completion_callback);
     };
   }, []);
 
@@ -574,19 +585,12 @@ function PromptArea({showDialog}) {
   ) => {
     const prompt  = regenerate ? passedInPrompt : editorState.getCurrentContent().getPlainText();
     
-    if (prompt.length > 5000) {
-      showDialog({
-        title: "Prompt is too large!",
-        message: "Please reduce the size of your prompt for the generation to be submitted successfully. Your current size is " + prompt.length + " characters, however, we currently allow a maximum of 5000 characters.",
-      })
-      return
-    }
     setGenerating(true)
     setEditorContext({
       prePrompt: prompt
     })
 
-    const _cancel_callback = apiContext.completionRequest({
+    const _cancel_callback = apiContext.Inference.textCompletionRequest({
       prompt: regenerate ? passedInPrompt : prompt,
       models: modelsStateContext.map((modelState) => {
         if(modelState.enabled) {
@@ -788,10 +792,10 @@ const ModelsCompletion = ({showDialog}) => {
       }
     }
 
-    apiContext.subscribeCompletion(completion_callback)
+    apiContext.Inference.subscribeTextCompletion(completion_callback)
 
     return () => {
-      apiContext.unsubscribeCompletion(completion_callback);
+      apiContext.Inference.unsubscribeTextCompletion(completion_callback);
     };
   }, []);
 

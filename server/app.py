@@ -5,11 +5,13 @@ import warnings
 import io
 import queue
 import sys
+from pathlib import Path
 import json
 import threading
 import time
 import re
 
+from server.lib.entities import Model, Provider
 from server.lib.inference import ProviderDetails, InferenceManager, InferenceRequest
 from server.lib.event_emitter import EventEmitter, EVENTS
 from server.lib.storage import Storage
@@ -31,15 +33,19 @@ warnings.formatwarning = warning_on_one_line
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-
 app = Flask(__name__)
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    if path == "" or not os.path.exists(app.static_folder + '/' + path):
+    if path == "" or not os.path.exists(f'{app.static_folder}/{path}'):
         path = 'index.html'
 
+    return send_from_directory(app.static_folder, path)
+
+@app.errorhandler(404)
+def page_not_found(i):
+    path = 'index.html'
     return send_from_directory(app.static_folder, path)
 
 @app.before_request
@@ -72,23 +78,21 @@ class MonitorThread(threading.Thread):
                 for line in lines:
                     if line == "":
                         continue
-                    
+
                     if line.startswith("Downloading shards:"):
-                        progress = re.search(r"\| (\d+)/(\d+) \[", line)
-                        if progress:
-                            current_shard, total_shards = int(progress.group(1)), int(progress.group(2))
+                        if progress := re.search(r"\| (\d+)/(\d+) \[", line):
+                            current_shard, total_shards = int(progress[1]), int(progress[2])
                     elif line.startswith("Downloading"):
                         percentage = re.search(r":\s+(\d+)%", line)
-                        percentage = percentage.group(0)[2:] if percentage else ""
+                        percentage = percentage[0][2:] if percentage else ""
 
                         progress = re.search(r"\[(.*?)\]", line)
-                        if progress and "?" not in progress.group(0):
-                            current_duration, rest = progress.group(0)[1:-1].split("<")
+                        if progress and "?" not in progress[0]:
+                            current_duration, rest = progress[0][1:-1].split("<")
                             total_duration, speed = rest.split(",")
 
-                            download_size = re.search(r"\| (.*?)\[", line)
-                            if download_size:
-                                current_size, total_size = download_size.group(0)[2:-1].strip().split("/")
+                            if download_size := re.search(r"\| (.*?)\[", line):
+                                current_size, total_size = download_size[0][2:-1].strip().split("/")
 
                             self.event_emitter.emit(EVENTS.MODEL_DOWNLOAD_UPDATE, self.model, {
                                 'current_shard': current_shard,
@@ -117,13 +121,28 @@ class NotificationManager:
     def __init__(self, sse_queue: SSEQueueWithTopic):
         self.event_emitter = EventEmitter()
         self.event_emitter.on(EVENTS.MODEL_UPDATED, self.__model_updated_callback__)
+        self.event_emitter.on(EVENTS.MODEL_ADDED, self.__model_added_callback__)
         #TODO Fix the bug where SSE gets blocked
         #self.event_emitter.on(EVENTS.MODEL_DOWNLOAD_UPDATE, self.__model_download_update_callback__)
         self.sse_queue = sse_queue
 
+    def __model_added_callback__(self, model_name, model):
+        if model.status == 'ready':
+            self.sse_queue.publish(json.dumps({
+                'type': 'notification',
+                'data': {
+                    'message': {
+                        'event': 'modelAdded',
+                        'data': {
+                            'model': model.name,
+                            'provider': model.provider
+                        }
+                    }
+                }
+            }))
+
     def __model_updated_callback__(self, model_name, model):
         if model.status == 'ready':
-            print("Publishing model added event...")
             self.sse_queue.publish(json.dumps({
                 'type': 'notification',
                 'data': {
@@ -138,8 +157,6 @@ class NotificationManager:
             }))
 
     def __model_download_update_callback__(self, _, model, progress):
-        print(f"Model download progress: {model} {progress}")
-
         self.sse_queue.publish(json.dumps({
             'type': 'notification',
             'data': {
@@ -173,6 +190,27 @@ class DownloadManager:
             if model.status == 'pending':
                 self.model_queue.put(model)
 
+        # TODO: In the future it might make sense to have local provider specific instances
+        cache_info = scan_cache_dir()
+        hugging_face_local = self.storage.get_provider("huggingface-local")
+ 
+        for repo_info in cache_info.repos:
+            repo_id = repo_info.repo_id
+            repo_type = repo_info.repo_type
+            if repo_type == "model":
+                if hugging_face_local.has_model(repo_id):
+                    continue
+                else:
+                    model = Model(
+                        name=repo_id,
+                        capabilities=hugging_face_local.default_capabilities,
+                        provider="huggingface-local",
+                        status="ready",
+                        enabled=False,
+                        parameters=hugging_face_local.default_parameters
+                    )
+                    hugging_face_local.add_model(model)
+
         t = threading.Thread(target=self.__download_loop__)
         t.start()
 
@@ -188,12 +226,9 @@ class DownloadManager:
                 output_buffer = io.StringIO()
                 model = self.model_queue.get(block=False)
 
-                print(f"Should download {model.name} from {model.provider}")
-               
                 monitor_thread =  MonitorThread(model, output_buffer)
-
                 monitor_thread.start()
-                print("About to start downloading")
+
                 sys.stderr = output_buffer
                 sys.stdout = output_buffer
                 _ = AutoTokenizer.from_pretrained(model.name)
@@ -275,17 +310,73 @@ def cli():
     pass
 
 @click.command()
-@click.option('--host',  '-h', default='localhost', help='The host to bind to [default: localhost]')
-@click.option('--port', '-p', default=5432, help='The port to bind to [default: 5432]')
-@click.option('--debug/--no-debug', default=False, help='Set flask to debug mode')
-@click.option('--env', '-e', default=".env", help='Environment file to read and store API keys')
-@click.option('--models', '-m', default=None, help='Config file containing model information')
+@click.help_option('-h', '--help')
+@click.option('--host',  '-h', default='localhost', help='The host to bind to. Default: localhost.')
+@click.option('--port', '-p', default=5432, help='The port to bind to. Default: 5432.')
+@click.option('--debug/--no-debug', default=False, help='Enable or disable Flask debug mode. Default: False.')
+@click.option('--env', '-e', default=".env", help='Path to the environment file for storing and reading API keys. Default: .env.')
+@click.option('--models', '-m', default=None, help='Path to the configuration file for loading models. Default: None.')
 def run(host, port, debug, env, models):
+    """
+    Run the OpenPlayground server.
+
+    This command starts the OpenPlayground server with the specified options.
+
+    Arguments:
+    --host, -h: The host to bind to. Default: localhost.
+    --port, -p: The port to bind to. Default: 5432.
+    --debug/--no-debug: Enable or disable Flask debug mode. Default: False.
+    --env, -e: Path to the environment file for storing and reading API keys. Default: .env.
+    --models, -m: Path to the configuration file for loading models. Default: None.
+
+    Example usage:
+
+    $ openplayground run --host=0.0.0.0 --port=8080 --debug --env=keys.env --models=models.json
+    """
     storage = Storage(models, env)
     app.config['GLOBAL_STATE'] = GlobalStateManager(storage)
 
     app.run(host=host, port=port, debug=debug)
 
+@click.command()
+@click.help_option('-h', '--help')
+@click.option('--input', '-i', default=None, help='Path to the configuration file for importing models')
+def import_config(input):
+    """
+    Import configuration settings.
+
+    This command imports configuration settings for one or more models from a file.
+
+    Arguments:
+    --input, -i: Path to the configuration file for importing models. Default: None.
+
+    Example usage:
+
+    $ openplayground import-config --input=/path/to/config.json
+    """
+    Storage.import_config(input)
+
+@click.command()
+@click.help_option('-h', '--help')
+@click.option('--output', '-o', default=None, help='Output file path for the exported configuration settings')
+@click.pass_context
+def export_config(ctx, output):
+    """
+    Export configuration settings.
+
+    This command exports the current configuration settings to a file.
+
+    Arguments:
+    --output, -o: Output file path for the exported configuration settings. Default: None.
+
+    Example usage:
+
+    $ openplayground export-config --output=/path/to/config.json
+    """
+    Storage.export_config(output)
+
+cli.add_command(export_config)
+cli.add_command(import_config)
 cli.add_command(run)
 
 if __name__ == '__main__':

@@ -4,9 +4,10 @@ from .event_emitter import EventEmitter, EVENTS
 
 class Model:
     def __init__(
-        self, name: str, enabled: bool, provider: str, status: str, parameters: dict = None
+        self, name: str, enabled: bool, capabilities: List[str],  provider: str, status: str, parameters: dict = None
     ):
         self.name = name
+        self.capabilities = capabilities
         self.enabled = enabled
         self.provider = provider
         self.status = status
@@ -15,6 +16,7 @@ class Model:
     def copy(self):
         return Model(
             name=self.name,
+            capabilities=self.capabilities,
             enabled=self.enabled,
             provider=self.provider,
             status=self.status,
@@ -22,7 +24,7 @@ class Model:
         )
 
     def __repr__(self):
-        return f'Model({self.name}, {self.enabled}, {self.provider}, {self.status}, {self.parameters})'
+        return f'Model({self.name}, {self.capabilities}, {self.enabled}, {self.provider}, {self.status}, {self.parameters})'
 
 class ModelEncoder(json.JSONEncoder):
     def __init__(self, *args, serialize_as_list=True, **kwargs):
@@ -31,7 +33,10 @@ class ModelEncoder(json.JSONEncoder):
 
     def default(self, obj):
         if isinstance(obj, Model):
-            properties = {"enabled": obj.enabled, "status": obj.status, "parameters": obj.parameters}
+            properties = {
+                "capabilities": obj.capabilities,
+                "enabled": obj.enabled, "status": obj.status, "parameters": obj.parameters
+            }
             if self.serialize_as_list:
                 return {**{"name": obj.name, "provider": obj.provider}, **properties}
             else:
@@ -41,23 +46,22 @@ class ModelEncoder(json.JSONEncoder):
 class Provider:
     def __init__(
         self, name: str, models: List[Model], remote_inference: bool = False,
-        default_parameters: dict = None, api_key: str = None, requires_api_key: bool = False,
+        default_capabilities: List[str] = None, default_parameters: dict = None,
+        api_key: str = None, requires_api_key: bool = False,
         search_url: str = None
     ):
         self.event_emitter = EventEmitter()
         self.name = name
         self.models = models
         self.remote_inference = remote_inference
+        self.default_capabilities = default_capabilities
         self.default_parameters = default_parameters
         self.api_key = api_key
         self.requires_api_key = requires_api_key
         self.search_url = search_url
     
     def has_model(self, model_name: str) -> bool:
-        for model in self.models:
-            if model.name == model_name:
-                return True
-        return False
+        return any(model.name == model_name for model in self.models)
     
     def get_model(self, model_name: str) -> Model:
         for model in self.models:
@@ -88,6 +92,7 @@ class Provider:
             name=self.name,
             models=[model.copy() for model in self.models],
             remote_inference=self.remote_inference,
+            default_capabilities=self.default_capabilities.copy() if self.default_capabilities else None,
             default_parameters=self.default_parameters.copy() if self.default_parameters else None,
             api_key=self.api_key,
             requires_api_key=self.requires_api_key,
@@ -105,7 +110,8 @@ class ProviderEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Provider):
             models = [{
-                "name": model.name, "enabled": model.enabled, "provider": model.provider,
+                "name": model.name, "capabilities": model.capabilities,
+                "enabled": model.enabled, "provider": model.provider,
                 "status": model.status, "parameters": model.parameters
             } for model in obj.models]
             

@@ -24,15 +24,29 @@ $ pip install openplayground
 $ openplayground run
 ```
 
-This runs a Flask process, so you can add the typical flags such as setting a different port `openplayground run -p 1235` and others. 
+Alternatively, run it as a docker container:
+```sh
+$ docker run --name openplayground -p 5432:5432 -d --volume openplayground:/web/config natorg/openplayground
+```
+
+This runs a Flask process, so you can add the typical flags such as setting a different port `openplayground run -p 1235` and others.
 
 ## How to run for development
 
 ```sh
 $ git clone https://github.com/nat/openplayground
 $ cd app && npm install && npx parcel watch src/index.html --no-cache
-$ cd server && pip3 install -r requirements.txt && cd .. && python -m server.app
+$ cd server && pip3 install -r requirements.txt && cd .. && python3 -m server.app
 ```
+
+## Docker
+
+```sh
+$ docker build . --tag "openplayground"
+$ docker run --name openplayground -p 5432:5432 -d --volume openplayground:/web/config openplayground
+```
+
+First volume is optional. It's used to store API keys, models settings.
 
 ## Ideas for contributions
 
@@ -49,13 +63,13 @@ $ cd server && pip3 install -r requirements.txt && cd .. && python -m server.app
 
 ### llama.cpp
 
-
-## Adding models to openplayground 
+## Adding models to openplayground
 
 Models and providers have three types in openplayground:
-+ Searchable
-+ Local inference
-+ API
+
+- Searchable
+- Local inference
+- API
 
 You can add models in `server/models.json` with the following schema:
 
@@ -66,6 +80,7 @@ For models running locally on your device you can add llama-cpp-python dependenc
 #### API Provider Inference
 
 This is for model providers like OpenAI, cohere, forefront, and more. You can connect them easily into openplayground (a minimal example):
+
 ```json
 "cohere": {
     "api_key" : true,

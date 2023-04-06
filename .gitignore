@@ -1,3 +1,5 @@
+# These files should be generated during dev/publishing
+server/static/*
 #mISC
 .DS_Store
 .vscode/

@@ -286,6 +286,7 @@ class EditorWrapper extends React.Component {
         onChange={(editorState: any) => {
           setEditorState(editorState)
         }}
+        stripPastedStyles
       />
     )
   }
@@ -319,6 +320,16 @@ const PromptCompletionEditor = ({showDialog}) => {
     highlightModelsRef.current = parametersContext.highlightModels
   })
 
+  React.useEffect(() => {
+    return () => {
+      setEditorContext({
+        ...editorContext,
+        internalState: convertToRaw(editorStateRef.current.getCurrentContent()),
+        prompt: editorStateRef.current.getCurrentContent().getPlainText()
+      }, true)
+    }
+  }, []);
+
   useEffect(() => {
     if (editorContext.internalState) {
       setEditorState(
@@ -333,21 +344,14 @@ const PromptCompletionEditor = ({showDialog}) => {
     passedInPrompt = ""
   ) => {
     const prompt  = regenerate ? passedInPrompt : editorState.getCurrentContent().getPlainText();
-    console.warn("Prompt became", prompt, "old", passedInPrompt)
-    if (prompt.length > 5000) {
-      showDialog({
-        title: "Prompt is too large!",
-        message: "Please reduce the size of your prompt for the generation to be submitted successfully. Your current size is " + prompt.length + " characters, however, we currently allow a maximum of 5000 characters.",
-      })
-      return
-    }
+
     setGenerating(true)
     setEditorContext({
       prePrompt: prompt,
       previousInternalState: convertToRaw(editorState.getCurrentContent())
     })
 
-    const _cancel_callback = apiContext.completionRequest({
+    const _cancel_callback = apiContext.Inference.textCompletionRequest({
       prompt: regenerate ? passedInPrompt : prompt,
       models: modelsStateContext.map((modelState) => {
         if(modelState.selected) {
@@ -432,10 +436,10 @@ const PromptCompletionEditor = ({showDialog}) => {
       }
     }
     
-    apiContext.subscribeCompletion(completionCallback)
+    apiContext.Inference.subscribeTextCompletion(completionCallback)
 
     return () => {
-      apiContext.unsubscribeCompletion(completionCallback);
+      apiContext.Inference.unsubscribeTextCompletion(completionCallback);
     };
   }, []);
 
@@ -582,14 +586,9 @@ const PromptCompletionEditor = ({showDialog}) => {
 
   const editorStateRef = useRef<EditorState>(editorState)
   
-  /*useEffect(() => {
-    console.log("HERE AS WELL???")
-    setEditorContext({
-      internalState: convertToRaw(editorState.getCurrentContent())
-    })
-  }, [
-    editorState
-  ])*/
+  useEffect(() => {
+    editorStateRef.current = editorState;
+  }, [editorState]);
 
   useEffect(() => {
     setEditorState(

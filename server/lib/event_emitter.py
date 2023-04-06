@@ -34,19 +34,17 @@ class EventEmitter(metaclass=Singleton):
 
     def off(self, event, listener):
         with self._lock:
-            if event in self.listeners:
-                if listener in self.listeners[event]:
-                    self.listeners[event].remove(listener)
+            if event in self.listeners and listener in self.listeners[event]:
+                self.listeners[event].remove(listener)
 
     def emit(self, event: EVENTS, *args, **kwargs):
-        if event in EVENTS.__members__.values():
-            if event.value not in self.listeners:
-                return
+        if event not in EVENTS.__members__.values():
+            raise ValueError(f"Invalid event type: {event}")
+        if event.value not in self.listeners:
+            return
 
-            with self._lock:
-                listeners_to_notify = self.listeners[event.value].copy()
+        with self._lock:
+            listeners_to_notify = self.listeners[event.value].copy()
 
-            for listener in listeners_to_notify:
-                listener(event, *args, **kwargs)
-        else:
-            raise ValueError("Invalid event type: %s" % event)
+        for listener in listeners_to_notify:
+            listener(event, *args, **kwargs)

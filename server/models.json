@@ -6,7 +6,7 @@
       "text-ada-001": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -54,7 +54,7 @@
       "text-babbage-001": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -102,7 +102,7 @@
       "text-curie-001": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -150,7 +150,7 @@
       "text-davinci-003": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -198,7 +198,7 @@
       "gpt-3.5-turbo": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -246,7 +246,7 @@
       "gpt-4": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -300,7 +300,7 @@
       "xlarge": {
         "enabled": false,
         "status": "ready",
-        "meta": [],
+        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -353,7 +353,7 @@
       "medium": {
         "enabled": false,
         "status": "ready",
-        "meta": [],
+        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -406,7 +406,7 @@
       "command-medium-nightly": {
         "enabled": false,
         "status": "ready",
-        "meta": [],
+        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -459,7 +459,7 @@
       "command-xlarge-nightly": {
         "enabled": false,
         "status": "ready",
-        "meta": [],
+        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -515,7 +515,7 @@
     "requiresAPIKey": true,
     "remoteInference": true,
     "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model",
-    "defaultMeta": [],
+    "defaultCapabilities": [],
     "defaultParameters": {
       "temperature": {
         "value": 1,
@@ -532,10 +532,10 @@
         ]
       },
       "topP": {
-        "value": 1,
+        "value": 0.99,
         "range": [
-          0.1,
-          1
+          0.01,
+          0.99
         ]
       },
       "topK": {
@@ -548,7 +548,7 @@
       "repetitionPenalty": {
         "value": 1,
         "range": [
-          0,
+          0.1,
           2
         ]
       },
@@ -563,7 +563,7 @@
     "requiresAPIKey": false,
     "remoteInference": false,
     "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model",
-    "defaultMeta": [],
+    "defaultCapabilities": [],
     "defaultParameters": {
       "temperature": {
         "value": 1,
@@ -580,10 +580,10 @@
         ]
       },
       "topP": {
-        "value": 1,
+        "value": 0.99,
         "range": [
           0.1,
-          1
+          0.99
         ]
       },
       "topK": {
@@ -596,7 +596,7 @@
       "repetitionPenalty": {
         "value": 1,
         "range": [
-          0,
+          0.1,
           2
         ]
       }
@@ -688,7 +688,7 @@
       "claude-instant-v1.0": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -743,7 +743,7 @@
       "claude-v1.2": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -804,7 +804,7 @@
       "luminous-supreme-control": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -839,7 +839,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -852,7 +852,7 @@
       "luminous-base": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -887,7 +887,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -900,7 +900,7 @@
       "luminous-supreme": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -935,7 +935,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -948,7 +948,7 @@
       "luminous-extended": {
         "enabled": false,
         "status": "ready",
-        "meta": [
+        "capabilities": [
           "logprobs"
         ],
         "parameters": {
@@ -983,7 +983,7 @@
           "repetitionPenalty": {
             "value": 1,
             "range": [
-              0,
+              0.1,
               1
             ]
           },
@@ -999,7 +999,7 @@
     "requiresAPIKey": false,
     "remoteInference": false,
     "searchURL": "https://openplayground.filler/api/search?q={searchQuery}",
-    "defaultMeta": [],
+    "defaultCapabilities": [],
     "defaultParameters": {
       "temperature": {
         "value": 1,
@@ -1032,7 +1032,7 @@
       "repetitionPenalty": {
         "value": 1,
         "range": [
-          0,
+          0.1,
           2
         ]
       }
