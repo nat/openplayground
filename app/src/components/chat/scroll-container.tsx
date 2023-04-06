@@ -4,7 +4,7 @@ const ScrollContainer: FC<{ children: ReactNode }> = ({ children }) => {
   const outerRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
 
-  const prevRender = useRef<null | boolean>(null)
+  const prevRender = useRef(false)
 
   useEffect(() => {
     const outerHeight = outerRef.current!.clientHeight
