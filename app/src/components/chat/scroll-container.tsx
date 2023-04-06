@@ -1,20 +1,10 @@
-import { FC, ReactNode, useEffect, useRef } from "react"
+import { FC, ReactNode, useEffect, useRef, useState } from "react"
 
 const ScrollContainer: FC<{ children: ReactNode }> = ({ children }) => {
   const outerRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
 
-  // FIXME: We don't actually need this effect. We just need to differentiate
-  // between first and subsequent renders in the `useEffect` below.
-  useEffect(() => {
-    const outerHeight = outerRef.current!.clientHeight
-    const innerHeight = innerRef.current!.clientHeight
-
-    outerRef.current!.scrollTo({
-      top: innerHeight - outerHeight,
-      left: 0,
-    })
-  }, [])
+  const prevRender = useRef<null | boolean>(null)
 
   useEffect(() => {
     const outerHeight = outerRef.current!.clientHeight
@@ -23,8 +13,10 @@ const ScrollContainer: FC<{ children: ReactNode }> = ({ children }) => {
     outerRef.current!.scrollTo({
       top: innerHeight - outerHeight,
       left: 0,
-      behavior: "smooth",
+      behavior: prevRender.current ? "smooth" : "auto",
     })
+
+    prevRender.current = true
   }, [children])
 
   return (
