@@ -9,6 +9,8 @@ const MessageComposer: FC<Props> = ({ onSubmit }) => {
 
   function handleSubmit(evt: React.FormEvent<HTMLFormElement>) {
     evt.preventDefault()
+
+    if (!newMessage) return
     onSubmit(newMessage)
     setNewMessage("")
   }
