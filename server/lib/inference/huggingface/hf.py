@@ -6,7 +6,7 @@ import importlib
 import logging
 import warnings
 
-from transformers import AutoTokenizer, AutoConfig, PreTrainedModel, PreTrainedTokenizer
+from transformers import AutoTokenizer, AutoConfig, PreTrainedModel, PreTrainedTokenizer, AutoModelForCausalLM
 from .generator import greedy_search_generator
 from .helpers import StoppingCriteriaSub
 
@@ -36,8 +36,12 @@ class HFInference:
         '''
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         config = AutoConfig.from_pretrained(model_name) # load config for model
-        model_class = getattr(MODULE, config.architectures[0]) # get model class from config
-        model = model_class.from_pretrained(model_name, config=config) # dynamically load right model class for text generation
+        if config.architectures:
+            model_classname = config.architectures[0]
+            model_class = getattr(MODULE, model_classname) # get model class from config
+            model = model_class.from_pretrained(model_name, config=config) # dynamically load right model class for text generation
+        else:
+            model = AutoModelForCausalLM.from_pretrained(model_name, device_map='auto' if DEVICE == 'cuda' else None)
 
         param_size = sum(
             param.nelement() * param.element_size() for param in model.parameters()

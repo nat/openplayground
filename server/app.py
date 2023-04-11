@@ -11,6 +11,8 @@ import threading
 import time
 import re
 
+from contextlib import contextmanager
+
 from server.lib.entities import Model, Provider
 from server.lib.inference import ProviderDetails, InferenceManager, InferenceRequest
 from server.lib.event_emitter import EventEmitter, EVENTS
@@ -57,6 +59,23 @@ app.register_blueprint(api_bp)
 
 CORS(app)
 
+class RedirectStderr:
+    def __init__(self, new_stderr):
+        self.new_stderr = new_stderr
+        self.old_stderr = None
+
+    def __enter__(self):
+        self.old_stderr = sys.stderr
+        sys.stderr = self.new_stderr
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stderr = self.old_stderr
+
+@contextmanager
+def redirect_stderr(new_stderr):
+    with RedirectStderr(new_stderr):
+        yield
+
 class MonitorThread(threading.Thread):
     def __init__(self, model, output_buffer):
         super().__init__()
@@ -66,53 +85,51 @@ class MonitorThread(threading.Thread):
         self.event_emitter = EventEmitter()
 
     def run(self):
-        output_buffer = self.output_buffer
-        model_name = self.model.name.replace("/", "_")
-        current_shard = 0
-        total_shards = 0
-
-        while not self._stop_event.is_set():
+        with redirect_stderr(self.output_buffer):
+            # Code that may generate errors goes here
+            output_buffer = self.output_buffer
+            current_shard = 0
+            total_shards = 0
             last_line = 0
-            try:
-                lines = output_buffer.getvalue().splitlines()[last_line:]
-                for line in lines:
-                    if line == "":
-                        continue
+   
+            while not self._stop_event.is_set():
+                try:
+                    lines = output_buffer.getvalue().splitlines()[last_line:]
+                    last_line += len(lines)
 
-                    if line.startswith("Downloading shards:"):
-                        if progress := re.search(r"\| (\d+)/(\d+) \[", line):
-                            current_shard, total_shards = int(progress[1]), int(progress[2])
-                    elif line.startswith("Downloading"):
-                        percentage = re.search(r":\s+(\d+)%", line)
-                        percentage = percentage[0][2:] if percentage else ""
+                    for line in lines:
+                        if line == "":
+                            continue
 
-                        progress = re.search(r"\[(.*?)\]", line)
-                        if progress and "?" not in progress[0]:
-                            current_duration, rest = progress[0][1:-1].split("<")
-                            total_duration, speed = rest.split(",")
+                        if line.startswith("Downloading shards:"):
+                            if progress := re.search(r"\| (\d+)/(\d+) \[", line):
+                                current_shard, total_shards = int(progress[1]), int(progress[2])
+                        elif line.startswith("Downloading"):
+                            logger.info(line)
+                            percentage = re.search(r":\s+(\d+)%", line)
+                            percentage = percentage[0][2:] if percentage else ""
 
-                            if download_size := re.search(r"\| (.*?)\[", line):
-                                current_size, total_size = download_size[0][2:-1].strip().split("/")
+                            progress = re.search(r"\[(.*?)\]", line)
+                            if progress and "?" not in progress[0]:
+                                current_duration, rest = progress[0][1:-1].split("<")
+                                total_duration, speed = rest.split(",")
 
-                            self.event_emitter.emit(EVENTS.MODEL_DOWNLOAD_UPDATE, self.model, {
-                                'current_shard': current_shard,
-                                'total_shards': total_shards,
-                                'percentage': percentage.strip(),
-                                'current_duration': current_duration,
-                                'total_duration': total_duration,
-                                'speed': speed.strip(),
-                                'current_size': current_size,
-                                'total_size': total_size,
-                            })
-            except Exception as e:
-               with open("error.log", "a") as f:
-                   f.write(str(e))
-                   f.write("\n")
+                                if download_size := re.search(r"\| (.*?)\[", line):
+                                    current_size, total_size = download_size[0][2:-1].strip().split("/")
 
-               print(f"[PROGRESS] {str(e)}")
-
-            last_line += len(lines)
-            time.sleep(0.5)
+                                self.event_emitter.emit(EVENTS.MODEL_DOWNLOAD_UPDATE, self.model, {
+                                    'current_shard': current_shard,
+                                    'total_shards': total_shards,
+                                    'percentage': percentage.strip(),
+                                    'current_duration': current_duration,
+                                    'total_duration': total_duration,
+                                    'speed': speed.strip(),
+                                    'current_size': current_size,
+                                    'total_size': total_size,
+                                })
+                except Exception as e:
+                    logger.info(f"""[ERROR] {str(e)}""")
+                time.sleep(0.5)
 
     def stop(self):
         self._stop_event.set()
@@ -175,7 +192,7 @@ class NotificationManager:
 ### For now this will only deal with HuggingFace
 class DownloadManager:
     def __init__(self, storage: Storage):
-        print("Initializing download manager...")
+        logger.info("Initializing download manager...")
 
         self.event_emitter = EventEmitter()
         self.event_emitter.on(EVENTS.MODEL_ADDED, self.__model_added_callback__)
@@ -214,7 +231,7 @@ class DownloadManager:
         t = threading.Thread(target=self.__download_loop__)
         t.start()
 
-        print("Download loop started...")
+        logger.info("Download loop started...")
 
     def __model_added_callback__(self, model_name, model):
         if model.status == 'pending':
@@ -224,31 +241,30 @@ class DownloadManager:
         while True:
             try:
                 output_buffer = io.StringIO()
-                model = self.model_queue.get(block=False)
+                with redirect_stderr(output_buffer):
+                    model = self.model_queue.get(block=False)
 
-                monitor_thread =  MonitorThread(model, output_buffer)
-                monitor_thread.start()
+                    monitor_thread =  MonitorThread(model, output_buffer)
+                    monitor_thread.start()
 
-                sys.stderr = output_buffer
-                sys.stdout = output_buffer
-                _ = AutoTokenizer.from_pretrained(model.name)
-                _ = AutoModel.from_pretrained(model.name)
+                    logger.info("Inside loop, about to download model", model.name)
 
-                model.status = 'ready'
-                sys.stderr = sys.__stderr__
-                sys.stdout = sys.__stdout__
+                    _ = AutoTokenizer.from_pretrained(model.name)
+                    _ = AutoModel.from_pretrained(model.name)
 
-                self.storage.update_model(model.name, model)
+                    model.status = 'ready'
 
-                monitor_thread.stop()
-                monitor_thread.join()
-                
-                print("Finished downloading model", model.name)
+                    self.storage.update_model(model.name, model)
+
+                    monitor_thread.stop()
+                    monitor_thread.join()
+                    
+                    logger.info("Finished downloading model", model.name)
             except queue.Empty:
                 time.sleep(1)
             except Exception as e:
-                print("error", e)
-                print(f"Failed to download {model.name} from {model.provider}")
+                logger.error("error", e)
+                logger.error(f"Failed to download {model.name} from {model.provider}")
             finally:
                 time.sleep(1)
 
@@ -309,28 +325,31 @@ def cli():
 
 @click.command()
 @click.help_option('-h', '--help')
-@click.option('--host',  '-h', default='localhost', help='The host to bind to. Default: localhost.')
+@click.option('--host',  '-H', default='localhost', help='The host to bind to. Default: localhost.')
 @click.option('--port', '-p', default=5432, help='The port to bind to. Default: 5432.')
 @click.option('--debug/--no-debug', default=False, help='Enable or disable Flask debug mode. Default: False.')
 @click.option('--env', '-e', default=".env", help='Path to the environment file for storing and reading API keys. Default: .env.')
 @click.option('--models', '-m', default=None, help='Path to the configuration file for loading models. Default: None.')
-def run(host, port, debug, env, models):
+@click.option('--log-level', '-l', default='INFO', help='Set the logging level. Default: INFO.', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']))
+def run(host, port, debug, env, models, log_level):
     """
     Run the OpenPlayground server.
 
     This command starts the OpenPlayground server with the specified options.
 
     Arguments:
-    --host, -h: The host to bind to. Default: localhost.
+    --host, -H: The host to bind to. Default: localhost.
     --port, -p: The port to bind to. Default: 5432.
     --debug/--no-debug: Enable or disable Flask debug mode. Default: False.
     --env, -e: Path to the environment file for storing and reading API keys. Default: .env.
     --models, -m: Path to the configuration file for loading models. Default: None.
+    --log-level, -l: Set the logging level. Default: INFO. Choices: DEBUG, INFO, WARNING, ERROR, CRITICAL.
 
     Example usage:
 
-    $ openplayground run --host=0.0.0.0 --port=8080 --debug --env=keys.env --models=models.json
+    $ openplayground run --host=0.0.0.0 --port=8080 --debug --env=keys.env --models=models.json --log-level=DEBUG
     """
+    logging.basicConfig(level=getattr(logging, log_level.upper()))
     storage = Storage(models, env)
     app.config['GLOBAL_STATE'] = GlobalStateManager(storage)
 

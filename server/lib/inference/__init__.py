@@ -87,7 +87,7 @@ class InferenceAnnouncer:
         self.cancel_cache = cachetools.TTLCache(maxsize=1000, ttl=60)
 
     def __format_message__(self, event: str, infer_result: InferenceResult) -> str:
-        logger.info("formatting message")
+        logger.debug("formatting message")
         encoded = {
             "message": infer_result.token,
             "modelName": infer_result.model_name,
@@ -117,7 +117,7 @@ class InferenceAnnouncer:
         else:
             message = self.__format_message__(event=event, infer_result=infer_result)
 
-        logger.info(f"Announcing {event} for uuid: {infer_result.uuid}, message: {message}")
+        logger.debug(f"Announcing {event} for uuid: {infer_result.uuid}, message: {message}")
         self.sse_topic.publish(message)
 
         return True
@@ -568,6 +568,7 @@ class InferenceManager:
 
     def __local_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         cancelled = False
+        logger.info(f"Starting inference for {inference_request.uuid} - {inference_request.model_name}")
 
         hf = HFInference(inference_request.model_name)
         output = hf.generate(
