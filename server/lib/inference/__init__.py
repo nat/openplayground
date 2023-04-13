@@ -604,10 +604,10 @@ class InferenceManager:
     
     def __local_text_generation_llama__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         cancelled = False
-        env_modle_bin_path = inference_request.model_name.upper() + '_MODEL_BIN_PATH'
-        llama_modlel_path = os.environ.get(env_modle_bin_path)
+        env_model_bin_path = inference_request.model_name.upper() + '_MODEL_BIN_PATH'
+        llama_modlel_path = os.environ.get(env_model_bin_path)
         if not llama_modlel_path:
-            logger.error(f"please add {env_modle_bin_path} to the dot env file of environment variable!")
+            logger.error(f"please add {env_model_bin_path} to the dot env file of environment variable!")
             return
         llm = Llama(model_path=llama_modlel_path)
         stream = llm(
