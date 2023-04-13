@@ -1206,6 +1206,138 @@
             "range": []
           }
         }
+      },
+      "gpt4all-7b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "vicuna-13b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "koala-7b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
       }
     },
     "requiresAPIKey": false,

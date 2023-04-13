@@ -75,7 +75,7 @@ You can add models in `server/models.json` with the following schema:
 
 #### Local inference
 
-For models running locally on your device you can add llama-cpp-python dependency and set **LLAMA-7B_MODEL_BIN_PATH** variable in .env file. Keep in mind you will need to add a generation method for your model in `server/app.py`. Take a look at `local_text_generation_llama()` as an example.
+For models running locally on your device you can add llama-cpp-python dependency and set **LLAMA-7B_MODEL_BIN_PATH** and **LLAMA-7B_MODEL_BIN_PATH** variable in .env file. the **LLAMA-7B** part should match the name in models.json. Keep in mind you will need to add a generation method for your model in `server/app.py`. Take a look at `local_text_generation_llama()` as an example.
 
 #### API Provider Inference
 
