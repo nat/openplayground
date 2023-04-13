@@ -1,11 +1,14 @@
 [tool.poetry]
 name = "openplayground"
-version = "0.1.12a5"
-description = "test"
+version = "0.1.4"
+description = "An LLM playground you can run on your laptop."
 authors = ["Nat Friedman <nat@nat.org>"]
 readme = "README.md"
+homepage = "https://nat.dev/"
+repository = "https://github.com/nat/openplayground"
+keywords = ["llm", "playground", "openplayground"]
 packages = [
-    { include = "server", from = "" },
+  { include = "server", from = "" },
 ]
 
 [tool.poetry.dependencies]
