@@ -685,7 +685,7 @@
     "requiresAPIKey": true,
     "remoteInference": true,
     "models": {
-      "claude-instant-v1.0": {
+      "claude-instant-v1": {
         "enabled": false,
         "status": "ready",
         "capabilities": [
@@ -740,7 +740,7 @@
           }
         }
       },
-      "claude-v1.2": {
+      "claude-v1": {
         "enabled": false,
         "status": "ready",
         "capabilities": [

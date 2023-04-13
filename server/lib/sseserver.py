@@ -14,7 +14,7 @@ class SSEQueue:
         return q
 
     def publish(self, message: str):
-        logger.info(f"PUBLISHING {message}")
+        logger.debug(f"PUBLISHING {message}")
         for i in reversed(range(len(self.listeners))):
             try:
                 self.listeners[i].put_nowait(message)
@@ -32,7 +32,7 @@ class SSEQueueWithTopic:
         return self.pubsub[topic].listen()
 
     def publish(self, topic: str, message: str):
-        logger.info(f"PUBLISHING TO: {topic} MESSAGE: {message}")
+        logger.debug(f"PUBLISHING TO: {topic} MESSAGE: {message}")
         if topic not in self.pubsub:
             raise ValueError(f"Topic {topic} not found")
         self.pubsub[topic].announce(message=message)

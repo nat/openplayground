@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "openplayground"
-version = "0.1.12a4"
+version = "0.1.12a5"
 description = "test"
 authors = ["Nat Friedman <nat@nat.org>"]
 readme = "README.md"

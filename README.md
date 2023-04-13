@@ -8,7 +8,7 @@ https://user-images.githubusercontent.com/111631/227399583-39b23f48-9823-4571-a9
 
 - Use any model from [OpenAI](), [Anthropic](), [Cohere](), [Forefront](), [HuggingFace](), [Aleph Alpha](), and [llama.cpp]().
 - Full playground UI, including history, parameter tuning, keyboard shortcuts, and logprops.
-- Compare models side-by-side with the same prompt, individually tune model parameters, and retry with different paramaters.
+- Compare models side-by-side with the same prompt, individually tune model parameters, and retry with different parameters.
 - Automatically detects local models in your HuggingFace cache, and lets you install new ones.
 - Works OK on your phone.
 - Probably won't kill everyone.

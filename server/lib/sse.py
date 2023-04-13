@@ -127,7 +127,7 @@ class ServerSentEventsBlueprint(Blueprint):
         """
         message = Message(data, type=type, id=id, retry=retry)
         msg_json = json.dumps(message.to_dict())
-        logger.info(f"PUBLISHING: {msg_json} to channel: {channel}")
+        logger.debug(f"PUBLISHING: {msg_json} to channel: {channel}")
         return self.sse_server.sse_publish(channel=channel, message=msg_json)
 
     def messages(self, channel='sse'):
@@ -137,7 +137,7 @@ class ServerSentEventsBlueprint(Blueprint):
         self.sse_server.sse_subscribe(channel)
         try:
             for pubsub_message in self.sse_server.sse_listen(channel)._getvalue():
-                logger.info(f"pubsub_message: {pubsub_message}")            
+                logger.debug(f"pubsub_message: {pubsub_message}")            
                 if pubsub_message['type'] == 'message':
                     msg_dict = json.loads(pubsub_message['data'])
                     if msg_dict["type"] == "done":

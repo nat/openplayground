@@ -90,7 +90,7 @@ def stream_response(global_state, uuid):
                 if message["type"] == "done":
                     logger.info("Done streaming SSE")
                     break
-                logger.info(f"Yielding message: {json.dumps(message)}")
+                logger.debug(f"Yielding message: {json.dumps(message)}")
                 yield str(Message(**message))
         except GeneratorExit:
             logger.info("GeneratorExit")
