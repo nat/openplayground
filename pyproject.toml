@@ -1,12 +1,16 @@
 [tool.poetry]
 name = "openplayground"
-version = "0.1.12a5"
-description = "test"
+version = "0.1.5"
+description = "An LLM playground you can run on your laptop."
 authors = ["Nat Friedman <nat@nat.org>"]
 readme = "README.md"
+homepage = "https://nat.dev/"
+repository = "https://github.com/nat/openplayground"
+keywords = ["llm", "playground", "openplayground"]
 packages = [
-    { include = "server", from = "" },
+  { include = "server", from = "" },
 ]
+include = ["server/static/*"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -36,7 +40,6 @@ url = "https://pypi.org/simple/"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
 exclude = [
   ".env",
 ]
