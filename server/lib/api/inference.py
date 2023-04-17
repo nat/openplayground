@@ -124,6 +124,6 @@ def split_tasks_by_provider(tasks: List[InferenceRequest]) -> Tuple[List[Inferen
     local_tasks, remote_tasks = [], []
 
     for task in tasks:
-        (local_tasks if task.model_provider == "huggingface-local" else remote_tasks).append(task)
+        (local_tasks if "-local" in task.model_provider else remote_tasks).append(task)
 
     return local_tasks, remote_tasks

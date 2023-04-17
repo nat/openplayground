@@ -36,7 +36,7 @@ This runs a Flask process, so you can add the typical flags such as setting a di
 ```sh
 $ git clone https://github.com/nat/openplayground
 $ cd app && npm install && npx parcel watch src/index.html --no-cache
-$ cd server && pip3 install -r requirements.txt && cd .. && python3 -m server.app
+$ cd server && pip3 install -r requirements.txt && cd .. && python3 -m server.app -m ./server/models.json
 ```
 
 ## Docker
@@ -75,28 +75,42 @@ You can add models in `server/models.json` with the following schema:
 
 #### Local inference
 
-For models running locally on your device you can add them to openplayground like the following (a minimal example):
+For models running locally on your device you can add llama-cpp-python dependency and set **LLAMA-7B_MODEL_BIN_PATH** and **LLAMA-7B_MODEL_PROMPT_PATH** variable in .env file. the **LLAMA-7B** part should match the name in models.json. 
 
-```json
-"llama": {
-    "api_key" : false,
-    "models" : {
-        "llama-70b": {
-            "parameters": {
-                "temperature": {
-                    "value": 0.5,
-                    "range": [
-                        0.1,
-                        1.0
-                    ]
-                },
-            }
-        }
-    }
-}
+The LLAMA-7B_MODEL_PROMPT_PATH file should match the model prompt format. Here is some example:
+
+##### Llama
+
+```
+Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
+
+User: Hello, Bob.
+Bob: Hello. How may I help you today?
+User: Please tell me the largest city in Europe.
+Bob: Sure. The largest city in Europe is Moscow, the capital of Russia.
+User:{prompt}
+Bob:
 ```
 
-Keep in mind you will need to add a generation method for your model in `server/app.py`. Take a look at `local_text_generation()` as an example.
+##### Alpaca
+
+```
+### Instruction:
+{prompt}
+
+### Response:
+
+```
+
+##### Vicuna
+
+```
+### Human:{prompt}
+### Assistant:
+```
+
+
+Keep in mind you will need to add a generation method for your model in `server/app.py`. Take a look at `local_text_generation_llama()` as an example.
 
 #### API Provider Inference
 

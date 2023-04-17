@@ -1,14 +1,12 @@
 {
   "openai": {
-    "requiresAPIKey": true,
-    "remoteInference": true,
     "models": {
       "text-ada-001": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 0.5,
@@ -52,11 +50,11 @@
         }
       },
       "text-babbage-001": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 0.5,
@@ -100,11 +98,11 @@
         }
       },
       "text-curie-001": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 0.5,
@@ -148,11 +146,11 @@
         }
       },
       "text-davinci-003": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 0.5,
@@ -196,11 +194,11 @@
         }
       },
       "gpt-3.5-turbo": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 0.5,
@@ -244,11 +242,11 @@
         }
       },
       "gpt-4": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 0.5,
@@ -291,16 +289,18 @@
           }
         }
       }
-    }
-  },
-  "cohere": {
+    },
     "requiresAPIKey": true,
     "remoteInference": true,
+    "defaultParameters": null,
+    "searchURL": null
+  },
+  "cohere": {
     "models": {
       "xlarge": {
+        "capabilities": [],
         "enabled": false,
         "status": "ready",
-        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -351,9 +351,9 @@
         }
       },
       "medium": {
+        "capabilities": [],
         "enabled": false,
         "status": "ready",
-        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -404,9 +404,9 @@
         }
       },
       "command-medium-nightly": {
+        "capabilities": [],
         "enabled": false,
         "status": "ready",
-        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -457,9 +457,9 @@
         }
       },
       "command-xlarge-nightly": {
+        "capabilities": [],
         "enabled": false,
         "status": "ready",
-        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -509,13 +509,16 @@
           }
         }
       }
-    }
-  },
-  "huggingface": {
+    },
     "requiresAPIKey": true,
     "remoteInference": true,
-    "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model",
-    "defaultCapabilities": [],
+    "defaultParameters": null,
+    "searchURL": null
+  },
+  "huggingface": {
+    "models": {},
+    "requiresAPIKey": true,
+    "remoteInference": true,
     "defaultParameters": {
       "temperature": {
         "value": 1,
@@ -557,13 +560,307 @@
         "range": []
       }
     },
-    "models": {}
+    "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model"
   },
   "huggingface-local": {
+    "models": {
+      "sobamchan/bart-large-scitldr-distilled-3-3": {
+        "capabilities": [],
+        "enabled": false,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 0.99,
+            "range": [
+              0.1,
+              0.99
+            ]
+          },
+          "topK": {
+            "value": 1,
+            "range": [
+              1,
+              500
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0.1,
+              2
+            ]
+          }
+        }
+      },
+      "openai/clip-vit-large-patch14": {
+        "capabilities": [],
+        "enabled": false,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 0.99,
+            "range": [
+              0.1,
+              0.99
+            ]
+          },
+          "topK": {
+            "value": 1,
+            "range": [
+              1,
+              500
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0.1,
+              2
+            ]
+          }
+        }
+      },
+      "shibing624/text2vec-base-chinese": {
+        "capabilities": [],
+        "enabled": false,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 0.99,
+            "range": [
+              0.1,
+              0.99
+            ]
+          },
+          "topK": {
+            "value": 1,
+            "range": [
+              1,
+              500
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0.1,
+              2
+            ]
+          }
+        }
+      },
+      "laion/CLIP-ViT-H-14-laion2B-s32B-b79K": {
+        "capabilities": [],
+        "enabled": false,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 0.99,
+            "range": [
+              0.1,
+              0.99
+            ]
+          },
+          "topK": {
+            "value": 1,
+            "range": [
+              1,
+              500
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0.1,
+              2
+            ]
+          }
+        }
+      },
+      "csebuetnlp/mT5_m2o_chinese_simplified_crossSum": {
+        "capabilities": [],
+        "enabled": false,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 0.99,
+            "range": [
+              0.1,
+              0.99
+            ]
+          },
+          "topK": {
+            "value": 1,
+            "range": [
+              1,
+              500
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0.1,
+              2
+            ]
+          }
+        }
+      },
+      "decapoda-research/llama-7b-hf": {
+        "capabilities": [],
+        "enabled": false,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 0.99,
+            "range": [
+              0.1,
+              0.99
+            ]
+          },
+          "topK": {
+            "value": 1,
+            "range": [
+              1,
+              500
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0.1,
+              2
+            ]
+          }
+        }
+      },
+      "IDEA-CCNL/Randeng-BART-139M-SUMMARY": {
+        "capabilities": [],
+        "enabled": false,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 0.99,
+            "range": [
+              0.1,
+              0.99
+            ]
+          },
+          "topK": {
+            "value": 1,
+            "range": [
+              1,
+              500
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0.1,
+              2
+            ]
+          }
+        }
+      }
+    },
     "requiresAPIKey": false,
     "remoteInference": false,
-    "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model",
-    "defaultCapabilities": [],
     "defaultParameters": {
       "temperature": {
         "value": 1,
@@ -601,18 +898,507 @@
         ]
       }
     },
-    "models": {}
+    "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model"
+  },
+  "llama-local": {
+    "models": {
+      "llama-7b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:"
+            ],
+            "range": []
+          }
+        }
+      },
+      "llama-13b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:"
+            ],
+            "range": []
+          }
+        }
+      },
+      "llama-30b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:"
+            ],
+            "range": []
+          }
+        }
+      },
+      "alpaca-7b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "alpaca-13b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "alpaca-30b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "alpacacn-7b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "gpt4all-7b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "vicuna-13b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      },
+      "koala-7b": {
+        "capabilities": [],
+        "enabled": true,
+        "status": "ready",
+        "parameters": {
+          "temperature": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              1024
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "repetitionPenalty": {
+            "value": 1,
+            "range": [
+              0,
+              2
+            ]
+          },
+          "stopSequences": {
+            "value": [
+              "Question:",
+              "User:",
+              "Bob:",
+              "Joke:",
+              "### "
+            ],
+            "range": []
+          }
+        }
+      }
+    },
+    "requiresAPIKey": false,
+    "remoteInference": false,
+    "defaultParameters": {
+      "temperature": {
+        "value": 1,
+        "range": [
+          0.1,
+          1
+        ]
+      },
+      "maximumLength": {
+        "value": 200,
+        "range": [
+          50,
+          1024
+        ]
+      },
+      "topP": {
+        "value": 1,
+        "range": [
+          0.1,
+          1
+        ]
+      },
+      "repetitionPenalty": {
+        "value": 1,
+        "range": [
+          0,
+          2
+        ]
+      },
+      "stopSequences": {
+        "value": [
+          "Question:",
+          "\n"
+        ],
+        "range": []
+      }
+    },
+    "searchURL": null
   },
   "anthropic": {
-    "requiresAPIKey": true,
-    "remoteInference": true,
     "models": {
       "claude-instant-v1": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 1,
@@ -663,11 +1449,11 @@
         }
       },
       "claude-v1": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 1,
@@ -717,18 +1503,20 @@
           }
         }
       }
-    }
-  },
-  "aleph-alpha": {
+    },
     "requiresAPIKey": true,
     "remoteInference": true,
+    "defaultParameters": null,
+    "searchURL": null
+  },
+  "aleph-alpha": {
     "models": {
       "luminous-supreme-control": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 1,
@@ -772,11 +1560,11 @@
         }
       },
       "luminous-base": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 1,
@@ -820,11 +1608,11 @@
         }
       },
       "luminous-supreme": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 1,
@@ -868,11 +1656,11 @@
         }
       },
       "luminous-extended": {
-        "enabled": false,
-        "status": "ready",
         "capabilities": [
           "logprobs"
         ],
+        "enabled": false,
+        "status": "ready",
         "parameters": {
           "temperature": {
             "value": 1,
@@ -915,13 +1703,16 @@
           }
         }
       }
-    }
+    },
+    "requiresAPIKey": true,
+    "remoteInference": true,
+    "defaultParameters": null,
+    "searchURL": null
   },
   "openplayground": {
+    "models": {},
     "requiresAPIKey": false,
     "remoteInference": false,
-    "searchURL": "https://openplayground.filler/api/search?q={searchQuery}",
-    "defaultCapabilities": [],
     "defaultParameters": {
       "temperature": {
         "value": 1,
@@ -959,6 +1750,6 @@
         ]
       }
     },
-    "models": {}
+    "searchURL": "https://openplayground.filler/api/search?q={searchQuery}"
   }
 }
