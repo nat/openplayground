@@ -143,6 +143,40 @@ const AlertDialogCancel = React.forwardRef<
 ))
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName
 
+const CustomAlertDialogue = ({ dialog }) => {
+  const [openDialog, setOpenDialog] = React.useState<boolean>(false)
+  const [_dialogue, _setDialogue] = React.useState<any>({
+    title: "",
+    message: "",
+  })
+
+  React.useEffect(() => {
+    if (!openDialog && dialog.title !== "" && dialog.message !== "") {
+      _setDialogue({
+        title: dialog.title,
+        message: dialog.message,
+      })
+      setOpenDialog(true)
+    }
+  }, [dialog])
+
+  return (
+    <AlertDialog open={openDialog} onOpenChange={setOpenDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{_dialogue.title}</AlertDialogTitle>
+          <AlertDialogDescription className="text-base text-slate-700 dark:text-slate-400">
+            {_dialogue.message}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction>Ok</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 export {
   AlertDialog,
   AlertDialogTrigger,
@@ -153,4 +187,5 @@ export {
   AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
+  CustomAlertDialogue,
 }

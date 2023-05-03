@@ -91,7 +91,7 @@ class MonitorThread(threading.Thread):
             current_shard = 0
             total_shards = 0
             last_line = 0
-   
+
             while not self._stop_event.is_set():
                 try:
                     lines = output_buffer.getvalue().splitlines()[last_line:]
@@ -210,7 +210,7 @@ class DownloadManager:
         # TODO: In the future it might make sense to have local provider specific instances
         cache_info = scan_cache_dir()
         hugging_face_local = self.storage.get_provider("huggingface-local")
- 
+
         for repo_info in cache_info.repos:
             repo_id = repo_info.repo_id
             repo_type = repo_info.repo_type
@@ -236,7 +236,7 @@ class DownloadManager:
     def __model_added_callback__(self, model_name, model):
         if model.status == 'pending':
             self.model_queue.put(model)
-     
+
     def __download_loop__(self):
         while True:
             try:
@@ -258,7 +258,7 @@ class DownloadManager:
 
                     monitor_thread.stop()
                     monitor_thread.join()
-                    
+
                     logger.info("Finished downloading model", model.name)
             except queue.Empty:
                 time.sleep(1)
@@ -284,7 +284,7 @@ class GlobalStateManager:
 
     def get_storage(self):
         return self.storage
-    
+
     def get_sse_manager(self):
         return self.sse_manager
 
@@ -292,7 +292,7 @@ class GlobalStateManager:
         provider = self.storage.get_provider(inference_request.model_provider)
 
         provider_details = ProviderDetails(
-            api_key=provider.api_key ,
+            api_key=provider.api_key,
             version_key=None
         )
         logger.info(f"Received inference request {inference_request.model_provider}")
@@ -315,7 +315,7 @@ class GlobalStateManager:
             raise Exception(
                 f"Unknown model provider, {inference_request.model_provider}. Please add a generation function in InferenceManager or route in ModelManager.text_generation"
             )
-    
+
     def get_announcer(self):
         return self.inference_manager.get_announcer()
 

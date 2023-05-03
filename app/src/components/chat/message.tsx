@@ -11,8 +11,7 @@ interface Props {
 const Message: FC<Props> = ({ message }) => {
   return (
     <div className="flex gap-4">
-      <Avatar />
-
+      <Avatar name={message.author}/>
       <div className="prose">
         <ReactMarkdown children={message.content} remarkPlugins={[remarkGfm]} />
       </div>
