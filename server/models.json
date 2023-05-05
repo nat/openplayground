@@ -297,7 +297,7 @@
     "requiresAPIKey": true,
     "remoteInference": true,
     "models": {
-      "xlarge": {
+      "base": {
         "enabled": false,
         "status": "ready",
         "capabilities": [],
@@ -313,7 +313,7 @@
             "value": 200,
             "range": [
               50,
-              1024
+              2048
             ]
           },
           "topP": {
@@ -350,7 +350,7 @@
           }
         }
       },
-      "medium": {
+      "base-light": {
         "enabled": false,
         "status": "ready",
         "capabilities": [],
@@ -366,7 +366,7 @@
             "value": 200,
             "range": [
               50,
-              1024
+              2048
             ]
           },
           "topP": {
@@ -403,7 +403,7 @@
           }
         }
       },
-      "command-medium-nightly": {
+      "command-light-nightly": {
         "enabled": false,
         "status": "ready",
         "capabilities": [],
@@ -419,7 +419,7 @@
             "value": 200,
             "range": [
               50,
-              1024
+              4096
             ]
           },
           "topP": {
@@ -456,7 +456,7 @@
           }
         }
       },
-      "command-xlarge-nightly": {
+      "command-nightly": {
         "enabled": false,
         "status": "ready",
         "capabilities": [],
@@ -472,7 +472,7 @@
             "value": 200,
             "range": [
               50,
-              1024
+              4096
             ]
           },
           "topP": {
