@@ -6,7 +6,7 @@ https://user-images.githubusercontent.com/111631/227399583-39b23f48-9823-4571-a9
 
 #### Features
 
-- Use any model from [OpenAI](), [Anthropic](), [Cohere](), [Forefront](), [HuggingFace](), [Aleph Alpha](), and [llama.cpp]().
+- Use any model from [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com), [Forefront](https://forefront.ai), [HuggingFace](https://huggingface.co), [Aleph Alpha](https://aleph-alpha.com), [Replicate](https://replicate.com), [Banana](https://banana.dev) and [llama.cpp](https://github.com/ggerganov/llama.cpp).
 - Full playground UI, including history, parameter tuning, keyboard shortcuts, and logprops.
 - Compare models side-by-side with the same prompt, individually tune model parameters, and retry with different parameters.
 - Automatically detects local models in your HuggingFace cache, and lets you install new ones.
@@ -147,4 +147,4 @@ We use this for Huggingface Remote Inference models, the search endpoint is usef
 
 #### Credits
 
-Instigated by Nat Friedman. Initial implementation by [Zain Huda](https://github.com/zainhuda) as a repl.it bounty. Many features and extensive refactoring by Alex Lourenco.
+Instigated by Nat Friedman. Initial implementation by [Zain Huda](https://github.com/zainhuda) as a repl.it bounty. Many features and extensive refactoring by [Alex Lourenco](https://github.com/AlexanderLourenco).
