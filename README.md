@@ -20,13 +20,13 @@ Try the hosted version: [nat.dev](https://nat.dev).
 ## How to install and run
 
 ```sh
-$ pip install openplayground
-$ openplayground run
+pip install openplayground
+openplayground run
 ```
 
 Alternatively, run it as a docker container:
 ```sh
-$ docker run --name openplayground -p 5432:5432 -d --volume openplayground:/web/config natorg/openplayground
+docker run --name openplayground -p 5432:5432 -d --volume openplayground:/web/config natorg/openplayground
 ```
 
 This runs a Flask process, so you can add the typical flags such as setting a different port `openplayground run -p 1235` and others.
@@ -34,16 +34,16 @@ This runs a Flask process, so you can add the typical flags such as setting a di
 ## How to run for development
 
 ```sh
-$ git clone https://github.com/nat/openplayground
-$ cd app && npm install && npx parcel watch src/index.html --no-cache
-$ cd server && pip3 install -r requirements.txt && cd .. && python3 -m server.app
+git clone https://github.com/nat/openplayground
+cd app && npm install && npx parcel watch src/index.html --no-cache
+cd server && pip3 install -r requirements.txt && cd .. && python3 -m server.app
 ```
 
 ## Docker
 
 ```sh
-$ docker build . --tag "openplayground"
-$ docker run --name openplayground -p 5432:5432 -d --volume openplayground:/web/config openplayground
+docker build . --tag "openplayground"
+docker run --name openplayground -p 5432:5432 -d --volume openplayground:/web/config openplayground
 ```
 
 First volume is optional. It's used to store API keys, models settings.
