@@ -297,113 +297,7 @@
     "requiresAPIKey": true,
     "remoteInference": true,
     "models": {
-      "base": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0.1,
-              2
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              2048
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "topK": {
-            "value": 0,
-            "range": [
-              0,
-              500
-            ]
-          },
-          "presencePenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "base-light": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0.1,
-              2
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              2048
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "topK": {
-            "value": 0,
-            "range": [
-              0,
-              500
-            ]
-          },
-          "presencePenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "command-light-nightly": {
+      "command-light": {
         "enabled": false,
         "status": "ready",
         "capabilities": [],
@@ -456,7 +350,7 @@
           }
         }
       },
-      "command-nightly": {
+      "command": {
         "enabled": false,
         "status": "ready",
         "capabilities": [],
