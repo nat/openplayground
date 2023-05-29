@@ -606,10 +606,9 @@ class InferenceManager:
 
         response = c.completion_stream(
             prompt=f"{anthropic.HUMAN_PROMPT} {inference_request.prompt}{anthropic.AI_PROMPT}",
-            stopSequences=[anthropic.HUMAN_PROMPT] + inference_request.model_parameters['stopSequences'],
+            stop_sequences=[anthropic.HUMAN_PROMPT] + inference_request.model_parameters['stopSequences'],
             temperature=float(inference_request.model_parameters['temperature']),
-            topP=float(inference_request.model_parameters['topP']),
-            topK=int(inference_request.model_parameters['topK']),
+            top_p=float(inference_request.model_parameters['topP']),
             max_tokens_to_sample=inference_request.model_parameters['maximumLength'],
             model=inference_request.model_name,
             stream=True,

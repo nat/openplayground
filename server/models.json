@@ -504,9 +504,7 @@
       "claude-instant-v1": {
         "enabled": false,
         "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
+        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -529,27 +527,6 @@
               1
             ]
           },
-          "topK": {
-            "value": 1,
-            "range": [
-              1,
-              500
-            ]
-          },
-          "presencePenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
           "stopSequences": {
             "value": [],
             "range": []
@@ -559,9 +536,7 @@
       "claude-v1": {
         "enabled": false,
         "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
+        "capabilities": [],
         "parameters": {
           "temperature": {
             "value": 1,
@@ -581,27 +556,6 @@
             "value": 1,
             "range": [
               0.1,
-              1
-            ]
-          },
-          "topK": {
-            "value": 1,
-            "range": [
-              1,
-              500
-            ]
-          },
-          "presencePenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 1,
-            "range": [
-              0,
               1
             ]
           },
