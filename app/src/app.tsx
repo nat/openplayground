@@ -7,11 +7,16 @@ import {
 } from "draft-js"
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
+  useLocation,
 } from "react-router-dom"
 import { Toaster } from "./components/ui/toaster"
 import { useToast } from "./hooks/ui/use-toast"
+import { SIGN_IN } from "./constans"
+import { IsLoggedIn, beginLoginFlow, getAccessToken, getPathToRedirect } from "./utils/auth"
+import LoginCallback from "./pages/login_callback"
 
 const DEFAULT_PARAMETERS_STATE = {
   temperature: 1.0,
@@ -154,7 +159,7 @@ const APIContextWrapper = ({children}) => {
   const notificationSubscribers = React.useRef([]);
 
   useEffect(() => {
-    const sse_request = new SSE("/api/notifications")
+    const sse_request = new SSE("/api/notifications",{headers: { "Authorization": `Bearer ${getAccessToken()}` } })
     
     sse_request.addEventListener("notification", (event: any) => {
       const parsedEvent = JSON.parse(event.data);
@@ -166,10 +171,10 @@ const APIContextWrapper = ({children}) => {
   }, [])
 
   const Model = {
-    getAll: async () => (await fetch("/api/models")).json(),
-    getAllEnabled: async () => (await fetch("/api/models-enabled")).json(),
-    toggle: async (provider, model) => (await fetch(`/api/provider/${provider}/model/${encodeURIComponent(model)}/toggle-status`)).json(),
-    search: async (provider, query) => (await fetch(`/api/provider/${provider}/models/search?query=${query}`)).json(),
+    getAll: async () => (await fetch("/api/models",{headers: {"Authorization": `Bearer ${getAccessToken()}`}})).json(),
+    getAllEnabled: async () => (await fetch("/api/models-enabled", {headers: {"Authorization": `Bearer ${getAccessToken()}`}})).json(),
+    toggle: async (provider, model) => (await fetch(`/api/provider/${provider}/model/${encodeURIComponent(model)}/toggle-status`,{headers: {"Authorization": `Bearer ${getAccessToken()}`}})).json(),
+    search: async (provider, query) => (await fetch(`/api/provider/${provider}/models/search?query=${query}`,{headers: {"Authorization": `Bearer ${getAccessToken()}`}})).json(),
   };
 
   const Notifications = {
@@ -182,11 +187,11 @@ const APIContextWrapper = ({children}) => {
   };
   
   const Provider = {
-    setAPIKey: async (provider, apiKey) => (await fetch(`/api/provider/${provider}/api-key`, {method: "PUT", headers: {"Content-Type": "application/json"}, 
+    setAPIKey: async (provider, apiKey) => (await fetch(`/api/provider/${provider}/api-key`, {method: "PUT", headers: {"Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}`}, 
       body: JSON.stringify({apiKey: apiKey})}
     )).json(),
-    getAll: async () => (await fetch("/api/providers")).json(),
-    getAllWithModels: async () => (await fetch("/api/providers-with-key-and-models")).json(),
+    getAll: async () => (await fetch("/api/providers", {headers: {"Authorization": `Bearer ${getAccessToken()}`}})).json(),
+    getAllWithModels: async () => (await fetch("/api/providers-with-key-and-models", {headers: {"Authorization": `Bearer ${getAccessToken()}`}})).json(),
   };
   
   const Inference = {
@@ -241,7 +246,7 @@ const APIContextWrapper = ({children}) => {
     let error_occured = false;
     let request_complete = false;
   
-    sse_request = new SSE(url, {payload: JSON.stringify(payload)});
+    sse_request = new SSE(url, { payload: JSON.stringify(payload), headers: { "Authorization": `Bearer ${getAccessToken()}` } });
   
     bindSSEEvents(sse_request, completionsBuffer, {error_occured, request_complete}, beforeUnloadHandler, subscribers);
   
@@ -599,44 +604,98 @@ const PlaygroundContextWrapper = ({page, children}) => {
   )
 }
 
+export const LazyNavigate: React.FC<{ def: string }> = ({ def }) => {
+  const route = getPathToRedirect()
+  if (route) {
+    localStorage.removeItem("path_before_signin")
+  }
+  return <Navigate to={route || def} replace />
+}
+
+export const LoggedInRequired: React.FC = () => {
+  const loggedIn = IsLoggedIn()
+  const location = useLocation()
+
+  // If user is not logged in store visited page link and redirect user to login page
+  if (
+    !loggedIn &&
+    location.pathname.length > 1 &&
+    !location.pathname.includes(SIGN_IN)
+  ) {
+    localStorage.setItem(
+      'path_before_signin',
+      location.pathname + location.search ?? ''
+    )
+  }
+  return <Navigate to={SIGN_IN} replace />
+}
+
+const AuthLogin = () => {
+  useEffect(() => {
+    beginLoginFlow()
+  }, [])
+  return null
+}
+
 function ProviderWithRoutes() {
-  return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          <APIContextWrapper>
-            <PlaygroundContextWrapper key = "playground" page = "playground">
-              <Playground/>
-              <Toaster />
-            </PlaygroundContextWrapper>
-          </APIContextWrapper>
-        }
-      />
+    return (
+      <Routes>
+        <Route
+          path="/"
+          element={ IsLoggedIn() ?
+            <APIContextWrapper>
+              <PlaygroundContextWrapper key = "playground" page = "playground">
+                <Playground/>
+                <Toaster />
+              </PlaygroundContextWrapper>
+            </APIContextWrapper>
+            : <LoggedInRequired/>
+          }
+        />
 
-      <Route
-        path="/compare"
-        element={
-          <APIContextWrapper>
-            <PlaygroundContextWrapper key = "compare" page = "compare">
-              <Compare/>
-              <Toaster />
-            </PlaygroundContextWrapper>
-          </APIContextWrapper>
-        }
-      />
+        <Route
+          path="/compare"
+          element={IsLoggedIn() ?
+            <APIContextWrapper>
+              <PlaygroundContextWrapper key = "compare" page = "compare">
+                <Compare/>
+                <Toaster />
+              </PlaygroundContextWrapper>
+            </APIContextWrapper>
+            : <LoggedInRequired/>
+          }
+        />
 
-      <Route
-        path="/settings"
-        element={
-          <APIContextWrapper>
-            <Settings />
-            <Toaster />
-          </APIContextWrapper>
-        }
-      />
-    </Routes>
-  );
+        <Route
+          path="/settings"
+          element={IsLoggedIn() ?
+            <APIContextWrapper>
+              <Settings />
+              <Toaster />
+            </APIContextWrapper>
+            :<LoggedInRequired/>
+          }
+        />
+
+        <Route
+          path="/signin"
+          element={
+            IsLoggedIn() ?
+            <LazyNavigate def="/" />
+            : <AuthLogin />
+          }
+        />
+
+        <Route
+          path="/auth/callback"
+          element={
+            IsLoggedIn() ?
+            <LazyNavigate def="/" />
+            : <LoginCallback />
+          }
+        />
+      </Routes>
+    );
 }
 
 export default function App() {

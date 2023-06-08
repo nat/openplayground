@@ -27,8 +27,11 @@ from transformers import AutoTokenizer, AutoModel
 from huggingface_hub import hf_hub_download, try_to_load_from_cache, scan_cache_dir, _CACHED_NO_EXIST
 
 # Monkey patching for warnings, for convenience
+
+
 def warning_on_one_line(message, category, filename, lineno, file=None, line=None):
     return '%s:%s: %s: %s\n' % (filename, lineno, category.__name__, message)
+
 
 warnings.formatwarning = warning_on_one_line
 
@@ -36,6 +39,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
+
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -45,19 +49,23 @@ def serve(path):
 
     return send_from_directory(app.static_folder, path)
 
+
 @app.errorhandler(404)
 def page_not_found(i):
     path = 'index.html'
     return send_from_directory(app.static_folder, path)
+
 
 @app.before_request
 def before_request():
     g.global_state = app.config['GLOBAL_STATE']
     g.storage = g.global_state.get_storage()
 
+
 app.register_blueprint(api_bp)
 
 CORS(app)
+
 
 class RedirectStderr:
     def __init__(self, new_stderr):
@@ -71,10 +79,12 @@ class RedirectStderr:
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.stderr = self.old_stderr
 
+
 @contextmanager
 def redirect_stderr(new_stderr):
     with RedirectStderr(new_stderr):
         yield
+
 
 class MonitorThread(threading.Thread):
     def __init__(self, model, output_buffer):
@@ -91,7 +101,7 @@ class MonitorThread(threading.Thread):
             current_shard = 0
             total_shards = 0
             last_line = 0
-   
+
             while not self._stop_event.is_set():
                 try:
                     lines = output_buffer.getvalue().splitlines()[last_line:]
@@ -103,7 +113,8 @@ class MonitorThread(threading.Thread):
 
                         if line.startswith("Downloading shards:"):
                             if progress := re.search(r"\| (\d+)/(\d+) \[", line):
-                                current_shard, total_shards = int(progress[1]), int(progress[2])
+                                current_shard, total_shards = int(
+                                    progress[1]), int(progress[2])
                         elif line.startswith("Downloading"):
                             logger.info(line)
                             percentage = re.search(r":\s+(\d+)%", line)
@@ -111,11 +122,13 @@ class MonitorThread(threading.Thread):
 
                             progress = re.search(r"\[(.*?)\]", line)
                             if progress and "?" not in progress[0]:
-                                current_duration, rest = progress[0][1:-1].split("<")
+                                current_duration, rest = progress[0][1:-1].split(
+                                    "<")
                                 total_duration, speed = rest.split(",")
 
                                 if download_size := re.search(r"\| (.*?)\[", line):
-                                    current_size, total_size = download_size[0][2:-1].strip().split("/")
+                                    current_size, total_size = download_size[0][2:-1].strip().split(
+                                        "/")
 
                                 self.event_emitter.emit(EVENTS.MODEL_DOWNLOAD_UPDATE, self.model, {
                                     'current_shard': current_shard,
@@ -134,13 +147,16 @@ class MonitorThread(threading.Thread):
     def stop(self):
         self._stop_event.set()
 
+
 class NotificationManager:
     def __init__(self, sse_queue: SSEQueueWithTopic):
         self.event_emitter = EventEmitter()
-        self.event_emitter.on(EVENTS.MODEL_UPDATED, self.__model_updated_callback__)
-        self.event_emitter.on(EVENTS.MODEL_ADDED, self.__model_added_callback__)
-        #TODO Fix the bug where SSE gets blocked
-        #self.event_emitter.on(EVENTS.MODEL_DOWNLOAD_UPDATE, self.__model_download_update_callback__)
+        self.event_emitter.on(EVENTS.MODEL_UPDATED,
+                              self.__model_updated_callback__)
+        self.event_emitter.on(EVENTS.MODEL_ADDED,
+                              self.__model_added_callback__)
+        # TODO Fix the bug where SSE gets blocked
+        # self.event_emitter.on(EVENTS.MODEL_DOWNLOAD_UPDATE, self.__model_download_update_callback__)
         self.sse_queue = sse_queue
 
     def __model_added_callback__(self, model_name, model):
@@ -188,14 +204,17 @@ class NotificationManager:
             }
         }))
 
-### Perhaps this should be a singleton or each provider should have its own instance
-### For now this will only deal with HuggingFace
+# Perhaps this should be a singleton or each provider should have its own instance
+# For now this will only deal with HuggingFace
+
+
 class DownloadManager:
     def __init__(self, storage: Storage):
         logger.info("Initializing download manager...")
 
         self.event_emitter = EventEmitter()
-        self.event_emitter.on(EVENTS.MODEL_ADDED, self.__model_added_callback__)
+        self.event_emitter.on(EVENTS.MODEL_ADDED,
+                              self.__model_added_callback__)
         self.storage = storage
         self.model_queue = queue.Queue()
         self.__initialization_check__()
@@ -210,7 +229,7 @@ class DownloadManager:
         # TODO: In the future it might make sense to have local provider specific instances
         cache_info = scan_cache_dir()
         hugging_face_local = self.storage.get_provider("huggingface-local")
- 
+
         for repo_info in cache_info.repos:
             repo_id = repo_info.repo_id
             repo_type = repo_info.repo_type
@@ -236,7 +255,7 @@ class DownloadManager:
     def __model_added_callback__(self, model_name, model):
         if model.status == 'pending':
             self.model_queue.put(model)
-     
+
     def __download_loop__(self):
         while True:
             try:
@@ -244,10 +263,11 @@ class DownloadManager:
                 with redirect_stderr(output_buffer):
                     model = self.model_queue.get(block=False)
 
-                    monitor_thread =  MonitorThread(model, output_buffer)
+                    monitor_thread = MonitorThread(model, output_buffer)
                     monitor_thread.start()
 
-                    logger.info("Inside loop, about to download model", model.name)
+                    logger.info(
+                        "Inside loop, about to download model", model.name)
 
                     _ = AutoTokenizer.from_pretrained(model.name)
                     _ = AutoModel.from_pretrained(model.name)
@@ -258,15 +278,17 @@ class DownloadManager:
 
                     monitor_thread.stop()
                     monitor_thread.join()
-                    
+
                     logger.info("Finished downloading model", model.name)
             except queue.Empty:
                 time.sleep(1)
             except Exception as e:
                 logger.error("error", e)
-                logger.error(f"Failed to download {model.name} from {model.provider}")
+                logger.error(
+                    f"Failed to download {model.name} from {model.provider}")
             finally:
                 time.sleep(1)
+
 
 class GlobalStateManager:
     def __init__(self, storage):
@@ -274,7 +296,8 @@ class GlobalStateManager:
         self.sse_manager.add_topic("inferences")
         self.sse_manager.add_topic("notifications")
 
-        self.notification_manager = NotificationManager(self.sse_manager.get_topic("notifications"))
+        self.notification_manager = NotificationManager(
+            self.sse_manager.get_topic("notifications"))
 
         self.inference_manager = InferenceManager(
             self.sse_manager.get_topic("inferences")
@@ -284,7 +307,7 @@ class GlobalStateManager:
 
     def get_storage(self):
         return self.storage
-    
+
     def get_sse_manager(self):
         return self.sse_manager
 
@@ -292,10 +315,11 @@ class GlobalStateManager:
         provider = self.storage.get_provider(inference_request.model_provider)
 
         provider_details = ProviderDetails(
-            api_key=provider.api_key ,
+            api_key=provider.api_key,
             version_key=None
         )
-        logger.info(f"Received inference request {inference_request.model_provider}")
+        logger.info(
+            f"Received inference request {inference_request.model_provider}")
 
         if inference_request.model_provider == "openai":
             return self.inference_manager.openai_text_generation(provider_details, inference_request)
@@ -315,13 +339,15 @@ class GlobalStateManager:
             raise Exception(
                 f"Unknown model provider, {inference_request.model_provider}. Please add a generation function in InferenceManager or route in ModelManager.text_generation"
             )
-    
+
     def get_announcer(self):
         return self.inference_manager.get_announcer()
+
 
 @click.group()
 def cli():
     pass
+
 
 @click.command()
 @click.help_option('-h', '--help')
@@ -355,6 +381,7 @@ def run(host, port, debug, env, models, log_level):
 
     app.run(host=host, port=port, debug=debug)
 
+
 @click.command()
 @click.help_option('-h', '--help')
 @click.option('--input', '-i', default=None, help='Path to the configuration file for importing models')
@@ -372,6 +399,7 @@ def import_config(input):
     $ openplayground import-config --input=/path/to/config.json
     """
     Storage.import_config(input)
+
 
 @click.command()
 @click.help_option('-h', '--help')
@@ -392,12 +420,13 @@ def export_config(ctx, output):
     """
     Storage.export_config(output)
 
+
 cli.add_command(export_config)
 cli.add_command(import_config)
 cli.add_command(run)
 
 if __name__ == '__main__':
-    app.static_folder='../app/dist'
+    app.static_folder = '../app/dist'
     run()
 else:
-    app.static_folder='./static'
+    app.static_folder = './static'
