@@ -29,6 +29,8 @@ six="^1.16.0"
 sseclient="^0.0.27"
 torch="^2.0.0"
 transformers="^4.27.1"
+pyjwt="^2.4.0"
+cryptography="^37.0.4"
 
 [tool.poetry.scripts]
 openplayground = "server.app:cli"
