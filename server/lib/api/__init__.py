@@ -8,6 +8,7 @@ from .inference import inference_bp
 from .provider import provider_bp
 from flask import g, Blueprint, current_app, stream_with_context, Response
 from ..auth import token_required
+from .tfy_models import get_tfy_models
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -48,10 +49,13 @@ def all_models(current_user):
     Returns a list of all models
     '''
     logger.info("Getting all models")
+    tfy_models = get_tfy_models()
 
+    models_list = g.get('storage').get_models()
+    models_list.extend(tfy_models)
     return current_app.response_class(
         response=json.dumps(
-            g.get('storage').get_models(), cls=ModelEncoder, indent=4, serialize_as_list=False
+            models_list, cls=ModelEncoder, indent=4, serialize_as_list=False
         ),
         status=200,
         mimetype='application/json'
@@ -82,6 +86,7 @@ def enabled_models(current_user):
     logger.info("Getting enabled models")
     storage = g.get('storage')
     models_list = storage.get_enabled_models()
+    models_list.extend(get_tfy_models())
     models_dict = {
         f"{model.provider}:{model.name}": model for model in models_list}
 

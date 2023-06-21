@@ -1,10 +1,10 @@
 import json
-from typing import List
+from typing import List, Optional
 from .event_emitter import EventEmitter, EVENTS
 
 class Model:
     def __init__(
-        self, name: str, enabled: bool, capabilities: List[str],  provider: str, status: str, parameters: dict = None
+        self, name: str, enabled: bool, capabilities: List[str],  provider: str, status: str, parameters: dict = None, model_endpoint: Optional[str] = None
     ):
         self.name = name
         self.capabilities = capabilities
@@ -12,6 +12,7 @@ class Model:
         self.provider = provider
         self.status = status
         self.parameters = parameters
+        self.model_endpoint = model_endpoint
 
     def copy(self):
         return Model(
@@ -20,7 +21,8 @@ class Model:
             enabled=self.enabled,
             provider=self.provider,
             status=self.status,
-            parameters=self.parameters.copy()
+            parameters=self.parameters.copy(),
+            model_endpoint=self.model_endpoint
         )
 
     def __repr__(self):

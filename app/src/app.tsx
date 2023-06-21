@@ -427,6 +427,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
           tag: model_key,
           capabilities: modelDetails.capabilities,
           provider: modelDetails.provider,
+          model_endpoint: modelDetails.model_endpoint,
           parameters: Object.entries(modelDetails.parameters).reduce((acc, [key, fields]) => {
             acc[key] = fields.value;
             return acc;
@@ -439,6 +440,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
           existingModelEntry.capabilites = modelDetails.capabilities,
           existingModelEntry.provider = modelDetails.provider,
           existingModelEntry.tag = model_key;
+          existingModelEntry.model_endpoint = modelDetails.model_endpoint;
           existingModelEntry.parameters = Object.entries(modelDetails.parameters).reduce((acc, [key, fields]) => {
             acc[key] = fields.value;
             return acc;
