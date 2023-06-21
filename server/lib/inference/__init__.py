@@ -13,7 +13,7 @@ import logging
 from aleph_alpha_client import Client as aleph_client, CompletionRequest, Prompt
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Callable, Union
+from typing import Callable, Union, Optional
 from .huggingface.hf import HFInference
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ class InferenceRequest:
     model_provider: str
     model_parameters: dict
     prompt: str
+    model_endpoint: Optional[str] = None
 
 @dataclass
 class ProablityDistribution:
@@ -119,7 +120,6 @@ class InferenceAnnouncer:
 
         logger.debug(f"Announcing {event} for uuid: {infer_result.uuid}, message: {message}")
         self.sse_topic.publish(message)
-
         return True
 
     def cancel_callback(self, message):
@@ -666,6 +666,70 @@ class InferenceManager:
 
     def aleph_alpha_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         self.__error_handler__(self.__aleph_alpha_text_generation__, provider_details, inference_request)
+    
+    def __truefoundry_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        cancelled = False
+        logger.info(f"Starting inference for {inference_request.uuid} - {inference_request.model_name}")
+        model_endpoint = urllib.parse.urljoin(inference_request.model_endpoint, f'v2/models/{inference_request.model_name}/infer/simple')
+        response = requests.post(
+            url = model_endpoint,
+            json = {
+                "inputs": inference_request.prompt,
+                "parameters": {
+                    "max_new_tokens": int(inference_request.model_parameters['maximumLength']),
+                    "top_p": float(inference_request.model_parameters['topP']),
+                    "top_k": int(inference_request.model_parameters['topK']),
+                    "temperature": float(inference_request.model_parameters['temperature']),
+                    "repetition_penalty": float(inference_request.model_parameters['repetitionPenalty']),
+                    "return_full_text": False
+                }
+            }
+        )
+        response.raise_for_status()
+        output = response.json()[0]["generated_text"]
+        infer_response = None
+        output = output.split(' ')
+        for generated_token in output:
+            if cancelled: break
+            infer_response = InferenceResult(
+                uuid=inference_request.uuid,
+                model_name=inference_request.model_name,
+                model_tag=inference_request.model_tag,
+                model_provider=inference_request.model_provider,
+                token=' ',
+                probability=None,
+                top_n_distribution=None
+            )
+            if not self.announcer.announce(infer_response, event="infer"):
+                cancelled = True
+                logger.info(f"Cancelled inference for {inference_request.uuid} - {inference_request.model_name}")
+            
+            if cancelled: break
+            infer_response = InferenceResult(
+                uuid=inference_request.uuid,
+                model_name=inference_request.model_name,
+                model_tag=inference_request.model_tag,
+                model_provider=inference_request.model_provider,
+                token=generated_token,
+                probability=None,
+                top_n_distribution=None
+            )
+            if not self.announcer.announce(infer_response, event="infer"):
+                cancelled = True
+                logger.info(f"Cancelled inference for {inference_request.uuid} - {inference_request.model_name}")
+        self.announcer.announce(InferenceResult(
+            uuid=inference_request.uuid,
+            model_name=None,
+            model_tag=None,
+            model_provider=None,
+            token=None,
+            probability=None,
+            top_n_distribution=None
+        ), event="done")
+
+    def truefoundry_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        self.__error_handler__(self.__truefoundry_text_generation__, provider_details, inference_request)
+
     
     def get_announcer(self):
         return self.announcer 

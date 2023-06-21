@@ -37,7 +37,7 @@ class ModelEncoder(json.JSONEncoder):
         if isinstance(obj, Model):
             properties = {
                 "capabilities": obj.capabilities,
-                "enabled": obj.enabled, "status": obj.status, "parameters": obj.parameters
+                "enabled": obj.enabled, "status": obj.status, "parameters": obj.parameters, "model_endpoint": obj.model_endpoint
             }
             if self.serialize_as_list:
                 return {**{"name": obj.name, "provider": obj.provider}, **properties}

@@ -9,7 +9,7 @@ class SSEQueue:
 
     def listen(self):
         logger.info("LISTENING")
-        q = queue.Queue(maxsize=50) # what about multiprocessing.Queue?
+        q = queue.Queue(maxsize=2000) # what about multiprocessing.Queue?
         self.listeners.append(q)
         return q
 
