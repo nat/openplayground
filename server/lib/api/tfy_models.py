@@ -30,18 +30,18 @@ def get_text_generation_models(url, token, default_params={}):
                     path += '/'
                 model_endpoint = urljoin(model_endpoint, path)
 
-
-        models_list.append(
-            Model(
-                name=model['name'],
-                provider="truefoundry",
-                enabled=True,#model["deployment"]["manifest"]["replicas"] > 0 and model_endpoint is not None,
-                status="ready",
-                parameters=default_params,
-                model_endpoint=model_endpoint,
-                capabilities=[]
+        if model["deployment"]["manifest"]["replicas"] > 0 and model_endpoint is not None:
+            models_list.append(
+                Model(
+                    name=model['name'],
+                    provider="truefoundry",
+                    enabled=True,
+                    status="ready",
+                    parameters=default_params,
+                    model_endpoint=model_endpoint,
+                    capabilities=[]
+                )
             )
-        )
     return models_list
         
 
