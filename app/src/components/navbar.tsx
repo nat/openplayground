@@ -2,7 +2,7 @@ import React from "react"
 import { Link } from "react-router-dom"
 
 export default function NavBar({ tab, children }: any) {
-  const menu = ["playground", "compare", "settings"].map((menuName, index) => (
+  const menu = ["playground", "compare", "chat", "settings"].map((menuName, index) => (
     <div key = {menuName} className="align-middle mt-1 flex items-center">
       <Link
         to={`/${index > 0 ? menuName: ''}`}

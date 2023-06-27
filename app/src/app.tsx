@@ -1,5 +1,5 @@
 import React, { useEffect } from "react"
-import {Playground, Compare, Settings} from "./pages"
+import {Playground, Compare, Chat, Settings} from "./pages"
 import {SSE} from "sse.js"
 import {
   EditorState,
@@ -55,6 +55,12 @@ const DEFAULT_CONTEXTS = {
         selectAllModels: false,
         showParametersTable: false
       }
+    },
+    chat:{
+      history: DEFAULT_HISTORY_STATE,
+      editor: DEFAULT_EDITOR_STATE,
+      modelsState: [],
+      parameters: DEFAULT_PARAMETERS_STATE
     },
   },
   MODELS: [],
@@ -155,7 +161,7 @@ const APIContextWrapper = ({children}) => {
 
   useEffect(() => {
     const sse_request = new SSE("/api/notifications")
-    
+
     sse_request.addEventListener("notification", (event: any) => {
       const parsedEvent = JSON.parse(event.data);
       notificationSubscribers.current.forEach((callback) => {
@@ -180,15 +186,15 @@ const APIContextWrapper = ({children}) => {
       notificationSubscribers.current = notificationSubscribers.current.filter((cb) => cb !== callback);
     },
   };
-  
+
   const Provider = {
-    setAPIKey: async (provider, apiKey) => (await fetch(`/api/provider/${provider}/api-key`, {method: "PUT", headers: {"Content-Type": "application/json"}, 
+    setAPIKey: async (provider, apiKey) => (await fetch(`/api/provider/${provider}/api-key`, {method: "PUT", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({apiKey: apiKey})}
     )).json(),
     getAll: async () => (await fetch("/api/providers")).json(),
     getAllWithModels: async () => (await fetch("/api/providers-with-key-and-models")).json(),
   };
-  
+
   const Inference = {
     subscribeTextCompletion: (callback) => {
       textCompletionSubscribers.current.push(callback);
@@ -205,14 +211,14 @@ const APIContextWrapper = ({children}) => {
     },
     chatCompletion: createChatCompletionRequest,
   };
-  
+
   const [apiContext, _] = React.useState({
     Model,
     Notifications,
     Provider,
     Inference,
   });
-  
+
   function createTextCompletionRequest({prompt, models}) {
     const url = "/api/inference/text/stream";
     const payload = {
@@ -221,30 +227,30 @@ const APIContextWrapper = ({children}) => {
     };
     return createCompletionRequest(url, payload, textCompletionSubscribers);
   }
-  
+
   function createChatCompletionRequest(prompt, model) {
     const url = "/api/inference/chat/stream";
     const payload = {prompt, model};
     return createCompletionRequest(url, payload, chatCompletionSubscribers);
   }
-  
+
   function createCompletionRequest(url, payload, subscribers) {
     pendingCompletionRequest.current = true;
     let sse_request = null;
-  
+
     function beforeUnloadHandler() {
       if (sse_request) sse_request.close();
     }
-  
+
     window.addEventListener("beforeunload", beforeUnloadHandler);
     const completionsBuffer = createCompletionsBuffer(payload.models);
     let error_occured = false;
     let request_complete = false;
-  
+
     sse_request = new SSE(url, {payload: JSON.stringify(payload)});
-  
+
     bindSSEEvents(sse_request, completionsBuffer, {error_occured, request_complete}, beforeUnloadHandler, subscribers);
-  
+
     return () => {
       if (sse_request) sse_request.close();
     };
@@ -257,32 +263,32 @@ const APIContextWrapper = ({children}) => {
     });
     return buffer;
   }
-  
+
   function bindSSEEvents(sse_request, completionsBuffer, requestState, beforeUnloadHandler, subscribers) {
     sse_request.onopen = async () => {
       bulkWrite(completionsBuffer, requestState, subscribers);
     };
-  
+
     sse_request.addEventListener("infer", (event) => {
       let resp = JSON.parse(event.data);
       completionsBuffer[resp.modelTag].push(resp);
     });
-  
+
     sse_request.addEventListener("status", (event) => {
       subscribers.current.forEach((callback) => callback({
         event: "status",
         data: JSON.parse(event.data)
       }));
     });
-  
+
     sse_request.addEventListener("error", (event) => {
       requestState.error_occured = true;
       try {
         const message = JSON.parse(event.data);
-  
+
         subscribers.current.forEach((callback) => callback({
           "event": "error",
-          "data": message.status 
+          "data": message.status
         }));
       } catch (e) {
         subscribers.current.forEach((callback) => callback({
@@ -290,19 +296,19 @@ const APIContextWrapper = ({children}) => {
           "data": "Unknown error"
         }));
       }
-  
+
       close_sse(sse_request, requestState, beforeUnloadHandler, subscribers);
     });
-  
+
     sse_request.addEventListener("abort", () => {
       requestState.error_occured = true;
       close_sse(sse_request, requestState, beforeUnloadHandler, subscribers);
     });
-  
+
     sse_request.addEventListener("readystatechange", (event) => {
       if (event.readyState === 2) close_sse(sse_request, requestState, beforeUnloadHandler, subscribers);
     });
-  
+
     sse_request.stream();
   }
 
@@ -313,27 +319,27 @@ const APIContextWrapper = ({children}) => {
       "meta": {error: requestState.error_occured},
     }));
     window.removeEventListener("beforeunload", beforeUnloadHandler);
-  }  
-  
+  }
+
   function bulkWrite(completionsBuffer, requestState, subscribers) {
     setTimeout(() => {
       let newTokens = false;
       let batchUpdate = {};
-  
+
       for (let modelTag in completionsBuffer) {
         if (completionsBuffer[modelTag].length > 0) {
           newTokens = true;
           batchUpdate[modelTag] = completionsBuffer[modelTag].splice(0, completionsBuffer[modelTag].length);
         }
       }
-  
+
       if (newTokens) {
         subscribers.current.forEach((callback) => callback({
           event: "completion",
           data: batchUpdate,
         }));
       }
-  
+
       if (!requestState.request_complete) bulkWrite(completionsBuffer, requestState, subscribers);
     }, 20);
   }
@@ -347,12 +353,11 @@ const APIContextWrapper = ({children}) => {
 
 const PlaygroundContextWrapper = ({page, children}) => {
   const apiContext = React.useContext(APIContext)
-
   const [editorContext, _setEditorContext] = React.useState(DEFAULT_CONTEXTS.PAGES[page].editor);
   const [parametersContext, _setParametersContext] = React.useState(DEFAULT_CONTEXTS.PAGES[page].parameters);
   let [modelsStateContext, _setModelsStateContext] = React.useState(DEFAULT_CONTEXTS.PAGES[page].modelsState);
   const [modelsContext, _setModelsContext] = React.useState(DEFAULT_CONTEXTS.MODELS);
-  const [historyContext, _setHistoryContext] = React.useState(DEFAULT_CONTEXTS.PAGES[page].history);
+  const [historyContext, setHistoryContext] = React.useState(DEFAULT_CONTEXTS.PAGES[page].history);
 
   /* Temporary fix for models that have been purged remotely but are still cached locally */
   for(const {name} of modelsStateContext) {
@@ -360,7 +365,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
       modelsStateContext = modelsStateContext.filter(({name: _name}) => _name !== name)
     }
   }
-  
+
   const editorContextRef = React.useRef(editorContext);
   const historyContextRef = React.useRef(historyContext);
 
@@ -399,7 +404,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
         break;
       }
     }
-    
+
     apiContext.Notifications.subscribe(notificationCallback)
 
     return () => {
@@ -410,9 +415,9 @@ const PlaygroundContextWrapper = ({page, children}) => {
   const updateModelsData = async () => {
     const json_params = await apiContext.Model.getAllEnabled()
     const models = {};
-    
+
     const PAGE_MODELS_STATE = SETTINGS.pages[page].modelsState;
-     
+
     for (const [model_key, modelDetails] of Object.entries(json_params)) {
       const existingModelEntry = (PAGE_MODELS_STATE.find((model) => model.name === model_key));
 
@@ -448,7 +453,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
         provider: modelDetails.provider,
       }
     }
-      
+
     const SERVER_SIDE_MODELS = Object.keys(json_params);
     for (const {name} of PAGE_MODELS_STATE) {
       if (!SERVER_SIDE_MODELS.includes(name)) {
@@ -465,7 +470,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
   const setEditorContext = (newEditorContext, immediate=false) => {
     SETTINGS.pages[page].editor = {...SETTINGS.pages[page].editor, ...newEditorContext};
 
-    const _editor = {...SETTINGS.pages[page].editor, internalState: null };
+    const _editor = {...SETTINGS.pages[page].editor, internalState: null};
 
     _setEditorContext(_editor);
     if (immediate) {
@@ -485,14 +490,14 @@ const PlaygroundContextWrapper = ({page, children}) => {
 
   const setModelsContext = (newModels) => {
     SETTINGS.models = newModels;
-    
+
     debouncedSettingsSave()
     _setModelsContext(newModels);
   }
 
   const setModelsStateContext = (newModelsState) => {
     SETTINGS.pages[page].modelsState = newModelsState;
-    
+
     debouncedSettingsSave()
     _setModelsStateContext(newModelsState);
   }
@@ -503,7 +508,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
       show: (value === undefined || value === null) ? !SETTINGS.pages[page].history.show : value
     }
 
-    _setHistoryContext(_newHistory);
+    setHistoryContext(_newHistory);
 
     SETTINGS.pages[page].history = _newHistory;
     debouncedSettingsSave()
@@ -518,7 +523,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
     const year = currentDate.getFullYear();
     const month = String(currentDate.getMonth() + 1).padStart(2, '0');
     const day = String(currentDate.getDate()).padStart(2, '0');
-    
+
     const newEntry = {
       timestamp:  currentDate.getTime(),
       date:     `${year}-${month}-${day}`,
@@ -536,7 +541,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
       current: newEntry
     }
 
-    _setHistoryContext(_newHistory);
+    setHistoryContext(_newHistory);
 
     //console.warn("Adding to history", _newHistory)
     SETTINGS.pages[page].history = _newHistory;
@@ -549,7 +554,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
       entries: SETTINGS.pages[page].history.entries.filter((historyEntry) => historyEntry !== entry)
     }
 
-    _setHistoryContext(_newHistory);
+    setHistoryContext(_newHistory);
 
     SETTINGS.pages[page].history = _newHistory;
     debouncedSettingsSave()
@@ -562,7 +567,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
       current: null
     }
 
-    _setHistoryContext(_newHistory);
+    setHistoryContext(_newHistory);
 
     SETTINGS.pages[page].history = _newHistory;
     debouncedSettingsSave()
@@ -572,7 +577,7 @@ const PlaygroundContextWrapper = ({page, children}) => {
     SETTINGS.pages[page].history.current = entry;
     _setEditorContext(entry.editor);
 
-    _setHistoryContext(SETTINGS.pages[page].history);
+    setHistoryContext(SETTINGS.pages[page].history);
     setParametersContext(entry.parameters);
     setModelsStateContext(entry.modelsState);
   }
@@ -583,8 +588,8 @@ const PlaygroundContextWrapper = ({page, children}) => {
 
   return (
     <HistoryContext.Provider value = {{
-      historyContext, selectHistoryItem,
-      addHistoryEntry, removeHistoryEntry, clearHistory, toggleShowHistory
+      historyContext, setHistoryContext, selectHistoryItem,
+      addHistoryEntry, removeHistoryEntry, clearHistory, toggleShowHistory,
     }}>
       <EditorContext.Provider value = {{editorContext, setEditorContext}}>
         <ParametersContext.Provider value = {{parametersContext, setParametersContext}}>
@@ -621,6 +626,17 @@ function ProviderWithRoutes() {
             <PlaygroundContextWrapper key = "compare" page = "compare">
               <Compare/>
               <Toaster />
+            </PlaygroundContextWrapper>
+          </APIContextWrapper>
+        }
+      />
+
+      <Route
+        path="/chat"
+        element={
+          <APIContextWrapper>
+            <PlaygroundContextWrapper key = "chat" page = "chat">
+              <Chat/>
             </PlaygroundContextWrapper>
           </APIContextWrapper>
         }
