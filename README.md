@@ -39,6 +39,9 @@ cd app && npm install && npx parcel watch src/index.html --no-cache
 cd server && pip3 install -r requirements.txt && cd .. && python3 -m server.app
 ```
 
+After starting the server, `models.json` is copied to `~/.config/openplayground/models.json` and this is used instead of the bundled `models.json`. This allows you to add your own models to the playground and version them in your dotfiles.
+
+
 ## Docker
 
 ```sh
@@ -55,7 +58,7 @@ First volume is optional. It's used to store API keys, models settings.
 - Measure and display time to first token
 - Setup automatic builds with GitHub Actions
 - The default parameters for each model are configured in the `server/models.json` file. If you find better default parameters for a model, please submit a pull request!
-- Someone can help us make a homebrew package, and a dockerfile
+- Someone can help us make a homebrew package
 - Easier way to install open source models directly from openplayground, with `openplayground install <model>` or in the UI.
 - Find and fix bugs
 - ChatGPT UI, with turn-by-turn, markdown rendering, chatgpt plugin support, etc.
