@@ -243,6 +243,54 @@
           }
         }
       },
+      "gpt-3.5-turbo-16k": {
+        "enabled": false,
+        "status": "ready",
+        "capabilities": [
+          "logprobs"
+        ],
+        "parameters": {
+          "temperature": {
+            "value": 0.5,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "maximumLength": {
+            "value": 200,
+            "range": [
+              50,
+              16384
+            ]
+          },
+          "topP": {
+            "value": 1,
+            "range": [
+              0.1,
+              1
+            ]
+          },
+          "presencePenalty": {
+            "value": 0,
+            "range": [
+              0,
+              1
+            ]
+          },
+          "frequencyPenalty": {
+            "value": 0,
+            "range": [
+              0,
+              1
+            ]
+          },
+          "stopSequences": {
+            "value": [],
+            "range": []
+          }
+        }
+      },
       "gpt-4": {
         "enabled": false,
         "status": "ready",

@@ -326,7 +326,7 @@ class InferenceManager:
 
     def openai_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         # TODO: Add a meta field to the inference so we know when a model is chat vs text
-        if inference_request.model_name in ["gpt-3.5-turbo", "gpt-4"]:
+        if inference_request.model_name in ["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4"]:
             self.__error_handler__(self.__openai_chat_generation__, provider_details, inference_request)
         else:
             self.__error_handler__(self.__openai_text_generation__, provider_details, inference_request)
