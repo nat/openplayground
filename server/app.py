@@ -326,7 +326,7 @@ def cli():
 @click.command()
 @click.help_option('-h', '--help')
 @click.option('--host',  '-H', default='localhost', help='The host to bind to. Default: localhost.')
-@click.option('--port', '-p', default=5432, help='The port to bind to. Default: 5432.')
+@click.option('--port', '-p', default=51234, help='The port to bind to. Default: 51234.')
 @click.option('--debug/--no-debug', default=False, help='Enable or disable Flask debug mode. Default: False.')
 @click.option('--env', '-e', default=".env", help='Path to the environment file for storing and reading API keys. Default: .env.')
 @click.option('--models', '-m', default=None, help='Path to the configuration file for loading models. Default: None.')
@@ -339,7 +339,7 @@ def run(host, port, debug, env, models, log_level):
 
     Arguments:
     --host, -H: The host to bind to. Default: localhost.
-    --port, -p: The port to bind to. Default: 5432.
+    --port, -p: The port to bind to. Default: 51234.
     --debug/--no-debug: Enable or disable Flask debug mode. Default: False.
     --env, -e: Path to the environment file for storing and reading API keys. Default: .env.
     --models, -m: Path to the configuration file for loading models. Default: None.
