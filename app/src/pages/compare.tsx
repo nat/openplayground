@@ -63,10 +63,17 @@ const ModelCardStats = (props: any) => {
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const intervalRef = useRef(null);
   const [time, setTime] = useState(0);
+  const [timeToFirstToken, setFirstTokenTime] = useState(0);
+  const [receivedFirstToken, setReceivedFirstToken] = useState(false);
   
   useEffect(() => {
     if (is_running && isTimerRunning === false) {
       startTimer()
+    if (!receivedFirstToken){
+      let first_token_time = intervalRef.current >= 1000 ? `${intervalRef.current} s` : `${intervalRef.current} ms`
+      setFirstTokenTime(first_token_time)
+      setReceivedFirstToken(false)
+    }
     } else if (!is_running && isTimerRunning === true) {
       stopTimer()
     }
@@ -121,7 +128,9 @@ const ModelCardStats = (props: any) => {
 
   return (
     <div className="flex font-medium">
-      <span>{formatTime(time)}</span>
+      <span>First: {timeToFirstToken}</span>
+      <span className="flex-1"></span>
+      <span>Total: {formatTime(time)}</span>
       <span className="flex-1"></span>
       <span>
         <Tooltip delayDuration={300} skipDelayDuration={150} open={errorMessage ? true : false}>
