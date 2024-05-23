@@ -8,7 +8,7 @@ huggingface_hub==0.13.2
 openai==0.27.2
 psutil==5.9.4
 python-dotenv==1.0.0
-requests==2.28.2
+requests==2.32.0
 sentencepiece==0.1.97
 six==1.16.0
 sseclient==0.0.27
