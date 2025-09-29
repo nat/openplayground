@@ -1,0 +1,78 @@
+name: "Build"
+
+env:
+  ECR_REGISTRY: '019051184028.dkr.ecr.eu-west-1.amazonaws.com'
+  ECR_REPOSITORY: 'wags/openplayground'
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 🏗️ Build
+    runs-on: [debian-latest, X86]        
+    steps:
+    - name: Create workspace directory
+      run: |
+        mkdir -p "${{ github.run_id }}"
+
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      with:
+        path: ${{ github.run_id }}
+        fetch-depth: 0
+
+    - name: 🛠 Define variables
+      id: set_version
+      working-directory: ${{ github.run_id }}
+      run: |
+
+        # Extract X.Y.Z from version.yaml
+        CORE_VERSION=$(yq -r '.version' version.yaml)
+        echo "core_version=$CORE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: 🔐 Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: eu-west-1
+        aws-access-key-id: ${{ secrets.WAGS_CI_SERVICE_ACCOUNT_AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.WAGS_CI_SERVICE_ACCOUNT_AWS_SECRET_ACCESS_KEY }}
+
+    - name: 🔐 AWS ECR login
+      id: ecr-login
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: 📦️ Build docker image 
+      id: build_image
+      working-directory: ${{ github.run_id }}
+      run: |
+        docker build -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set_version.outputs.core_version }} -f ./Dockerfile . --progress=plain \
+          --label org.opencontainers.image.revision="$(git rev-parse HEAD)" \
+          --label org.opencontainers.image.created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --label org.opencontainers.image.ref.name="${{ github.ref_name }}"
+
+    - name: ⬆️ Push images to ECR
+      id: push_images
+      if: ${{ steps.build_image.conclusion == 'success' }}
+      working-directory: ${{ github.run_id }}
+      run: |
+        echo "Pushing images to ECR..."
+        docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set_version.outputs.core_version }}
+
+    - name: 🧹 Cleanup workspace
+      if: always()
+      run: |
+        rm -rf "${{ github.run_id }}"
+
+    - name: 🚀 Create RC release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.set_version.outputs.core_version }}
+        name: v${{ steps.set_version.outputs.core_version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        make_latest: false
