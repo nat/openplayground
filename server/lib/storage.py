@@ -56,6 +56,7 @@ class Storage:
                     api_key=os.environ.get(f'{provider_name.upper()}_API_KEY'),
                     requires_api_key=provider.get("requiresAPIKey", False),
                     search_url=provider.get('searchURL', None),
+                    api_url=provider.get('apiURL', None)
                 )
             )
 

@@ -9,6 +9,7 @@ import sseclient
 import urllib
 import traceback
 import logging
+import ollama
 
 from aleph_alpha_client import Client as aleph_client, CompletionRequest, Prompt
 from datetime import datetime
@@ -25,9 +26,11 @@ class ProviderDetails:
     Args:
         api_key (str): API key for provider
         version_key (str): version key for provider
+        api_url (str): API URL for provider (optional, only needed for providers that don't have a default URL or require a custom URL)
     '''
     api_key: str
     version_key: str
+    api_url: Union[str, None] = None
 
 @dataclass
 class InferenceRequest:
@@ -666,6 +669,157 @@ class InferenceManager:
 
     def aleph_alpha_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
         self.__error_handler__(self.__aleph_alpha_text_generation__, provider_details, inference_request)
+        
+        
+    def __ollama_text_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        """
+        Ollama文本生成函数（使用官方Python库）
+        支持流式响应
+        """
+        # 配置Ollama客户端（如果需要自定义host）
+        api_url = getattr(provider_details, 'api_url', 'http://localhost:11434')
+        
+        client = ollama.Client(host=api_url)
+        
+        # 构建生成参数
+        options = {
+            "temperature": inference_request.model_parameters.get('temperature', 0.7),
+            "top_p": inference_request.model_parameters.get('topP', 0.9),
+            "top_k": inference_request.model_parameters.get('topK', 40),
+            "num_predict": inference_request.model_parameters.get('maximumLength', 512),
+            "repeat_penalty": inference_request.model_parameters.get('repetitionPenalty', 1.1),
+        }
+        
+        # 添加停止序列
+        stop_sequences = inference_request.model_parameters.get('stopSequences', [])
+        if stop_sequences:
+            options["stop"] = stop_sequences
+        
+        cancelled = False
+        logger.info(f"Starting Ollama inference for {inference_request.uuid} - {inference_request.model_name}")
+        
+        try:
+            # 使用Ollama官方库进行流式生成
+            response = client.generate(
+                model=inference_request.model_name,
+                prompt=inference_request.prompt,
+                options=options,
+                stream=True
+            )
+            
+            
+            for chunk in response:
+                if cancelled:
+                    break
+                
+                # logger.debug(f"Ollama chunk received: {chunk}")
+                # 获取生成的token
+                generated_token = chunk.get('response', '')
+                
+                if generated_token:
+                    # 构建推理结果
+                    infer_response = InferenceResult(
+                        uuid=inference_request.uuid,
+                        model_name=inference_request.model_name,
+                        model_tag=inference_request.model_tag,
+                        model_provider=inference_request.model_provider,
+                        token=generated_token,
+                        probability=None,  # Ollama默认不返回token概率
+                        top_n_distribution=None
+                    )
+                    
+                    # 发送推理结果
+                    if not self.announcer.announce(infer_response, event="infer"):
+                        cancelled = True
+                        logger.info(f"Cancelled inference for {inference_request.uuid} - {inference_request.model_name}")
+            
+            logger.info(f"Ollama生成完成: {inference_request.uuid}")
+            
+        except ollama.ResponseError as e:
+            raise Exception(f"Ollama API错误: {e.error} (状态码: {e.status_code})")
+        except Exception as e:
+            raise Exception(f"Ollama文本生成失败: {str(e)}")
+
+
+    def ollama_text_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        """
+        Ollama文本生成的公共方法
+        通过错误处理器包装
+        """
+        self.__error_handler__(self.__ollama_text_generation__, provider_details, inference_request)
+
+
+    def __ollama_chat_generation__(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        """
+        Ollama聊天生成函数（如果模型支持聊天格式）
+        """
+        # 构建消息
+        messages = [
+            {"role": "user", "content": inference_request.prompt}
+        ]
+        
+        # 如果有系统提示，添加
+        system_content = getattr(inference_request, 'system_prompt', None)
+        if system_content:
+            messages.insert(0, {"role": "system", "content": system_content})
+        
+        # 构建选项
+        options = {
+            "temperature": inference_request.model_parameters.get('temperature', 0.7),
+            "top_p": inference_request.model_parameters.get('topP', 0.9),
+            "top_k": inference_request.model_parameters.get('topK', 40),
+            "num_predict": inference_request.model_parameters.get('maximumLength', 512),
+        }
+        
+        # 添加停止序列
+        stop_sequences = inference_request.model_parameters.get('stopSequences', [])
+        if stop_sequences:
+            options["stop"] = stop_sequences
+        
+        cancelled = False
+        
+        try:
+            # 使用Ollama聊天API
+            response = ollama.chat(
+                model=inference_request.model_name,
+                messages=messages,
+                options=options,
+                stream=True
+            )
+            
+            for chunk in response:
+                if cancelled:
+                    break
+                    
+                # 获取生成的token
+                generated_token = chunk.get('message', {}).get('content', '')
+                
+                if generated_token:
+                    infer_response = InferenceResult(
+                        uuid=inference_request.uuid,
+                        model_name=inference_request.model_name,
+                        model_tag=inference_request.model_tag,
+                        model_provider=inference_request.model_provider,
+                        token=generated_token,
+                        probability=None,
+                        top_n_distribution=None
+                    )
+                    
+                    if not self.announcer.announce(infer_response, event="infer"):
+                        cancelled = True
+                        logger.info(f"Cancelled inference for {inference_request.uuid} - {inference_request.model_name}")
+            
+        except ollama.ResponseError as e:
+            raise Exception(f"Ollama聊天API错误: {e.error}")
+        except Exception as e:
+            raise Exception(f"Ollama聊天生成失败: {str(e)}")
+
+
+    def ollama_chat_generation(self, provider_details: ProviderDetails, inference_request: InferenceRequest):
+        """
+        Ollama聊天生成的公共方法
+        """
+        self.__error_handler__(self.__ollama_chat_generation__, provider_details, inference_request)
     
     def get_announcer(self):
         return self.announcer 

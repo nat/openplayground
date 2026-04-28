@@ -48,7 +48,7 @@ class Provider:
         self, name: str, models: List[Model], remote_inference: bool = False,
         default_capabilities: List[str] = None, default_parameters: dict = None,
         api_key: str = None, requires_api_key: bool = False,
-        search_url: str = None
+        search_url: str = None, api_url: str = None
     ):
         self.event_emitter = EventEmitter()
         self.name = name
@@ -59,6 +59,7 @@ class Provider:
         self.api_key = api_key
         self.requires_api_key = requires_api_key
         self.search_url = search_url
+        self.api_url = api_url
     
     def has_model(self, model_name: str) -> bool:
         return any(model.name == model_name for model in self.models)
