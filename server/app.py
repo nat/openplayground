@@ -293,7 +293,8 @@ class GlobalStateManager:
 
         provider_details = ProviderDetails(
             api_key=provider.api_key ,
-            version_key=None
+            version_key=None,
+            api_url=provider.api_url
         )
         logger.info(f"Received inference request {inference_request.model_provider}")
 
@@ -311,6 +312,8 @@ class GlobalStateManager:
             return self.inference_manager.anthropic_text_generation(provider_details, inference_request)
         elif inference_request.model_provider == "aleph-alpha":
             return self.inference_manager.aleph_alpha_text_generation(provider_details, inference_request)
+        elif inference_request.model_provider == "ollama":
+            return self.inference_manager.ollama_text_generation(provider_details, inference_request)
         else:
             raise Exception(
                 f"Unknown model provider, {inference_request.model_provider}. Please add a generation function in InferenceManager or route in ModelManager.text_generation"

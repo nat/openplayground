@@ -1,812 +1,885 @@
 {
-  "openai": {
-    "requiresAPIKey": true,
-    "remoteInference": true,
-    "models": {
-      "text-ada-001": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 0.5,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              2048
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "presencePenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
+    "ollama": {
+        "models": {
+          "gemma4:e4b": {
+            "capabilities": [],
+            "enabled": true,
+            "status": "ready",
+            "parameters": {
+              "temperature": {
+                  "displayName": "Temperature",
+                  "description": "控制生成文本的随机性。较低的值使输出更确定，较高的值使输出更随机。",
+                  "value": 0.7,
+                  "range": [0.0, 2.0],
+                  "step": 0.1
+              },
+              "maximumLength": {
+                  "displayName": "Maximum Length",
+                  "description": "生成的最大token数量。",
+                  "value": 512,
+                  "range": [1, 4096]
+              },
+              "topP": {
+                  "displayName": "Top P",
+                  "description": "核采样概率。仅从累积概率超过此阈值的token中采样。",
+                  "value": 0.9,
+                  "range": [0.0, 1.0],
+                  "step": 0.05
+              },
+              "topK": {
+                  "displayName": "Top K",
+                  "description": "从概率最高的K个token中采样。设置为0时禁用。",
+                  "value": 40,
+                  "range": [0, 100]
+              },
+              "repetitionPenalty": {
+                  "displayName": "Repetition Penalty",
+                  "description": "惩罚重复token。值越高，惩罚越重。",
+                  "value": 1.1,
+                  "range": [1.0, 2.0],
+                  "step": 0.1
+              },
+              "frequencyPenalty": {
+                  "displayName": "Frequency Penalty",
+                  "description": "减少重复已频繁出现的token。",
+                  "value": 0.0,
+                  "range": [-2.0, 2.0],
+                  "step": 0.1
+              },
+              "presencePenalty": {
+                  "displayName": "Presence Penalty",
+                  "description": "惩罚已出现的token，无论其频率如何。",
+                  "value": 0.0,
+                  "range": [-2.0, 2.0],
+                  "step": 0.1
+              },
+              "stopSequences": {
+                  "displayName": "Stop Sequences",
+                  "description": "生成文本时遇到这些序列则停止。",
+                  "value": [],
+                  "range": []
+              }
+            }
           }
-        }
       },
-      "text-babbage-001": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 0.5,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              2048
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "presencePenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "text-curie-001": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 0.5,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              2048
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "presencePenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "text-davinci-003": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 0.5,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              4000
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "presencePenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "gpt-3.5-turbo": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 0.5,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              4097
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "presencePenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "gpt-4": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 0.5,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              8192
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "presencePenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 0,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      }
-    }
-  },
-  "cohere": {
-    "requiresAPIKey": true,
-    "remoteInference": true,
-    "models": {
-      "command-light": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0.1,
-              2
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              4096
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "topK": {
-            "value": 0,
-            "range": [
-              0,
-              500
-            ]
-          },
-          "presencePenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "command": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0.1,
-              2
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              4096
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "topK": {
-            "value": 0,
-            "range": [
-              0,
-              500
-            ]
-          },
-          "presencePenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "frequencyPenalty": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      }
-    }
-  },
-  "huggingface": {
-    "requiresAPIKey": true,
-    "remoteInference": true,
-    "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model",
-    "defaultCapabilities": [],
-    "defaultParameters": {
-      "temperature": {
-        "value": 1,
-        "range": [
-          0.1,
-          1
-        ]
-      },
-      "maximumLength": {
-        "value": 200,
-        "range": [
-          50,
-          1024
-        ]
-      },
-      "topP": {
-        "value": 0.99,
-        "range": [
-          0.01,
-          0.99
-        ]
-      },
-      "topK": {
-        "value": 1,
-        "range": [
-          1,
-          500
-        ]
-      },
-      "repetitionPenalty": {
-        "value": 1,
-        "range": [
-          0.1,
-          2
-        ]
-      },
-      "stopSequences": {
-        "value": [],
-        "range": []
-      }
+      "requiresAPIKey": false,
+      "remoteInference": true,
+      "defaultParameters": null,
+      "apiURL": "http://192.168.1.3:11434"
     },
-    "models": {}
-  },
-  "huggingface-local": {
-    "requiresAPIKey": false,
-    "remoteInference": false,
-    "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model",
-    "defaultCapabilities": [],
-    "defaultParameters": {
-      "temperature": {
-        "value": 1,
-        "range": [
-          0.1,
-          1
-        ]
-      },
-      "maximumLength": {
-        "value": 200,
-        "range": [
-          50,
-          1024
-        ]
-      },
-      "topP": {
-        "value": 0.99,
-        "range": [
-          0.1,
-          0.99
-        ]
-      },
-      "topK": {
-        "value": 1,
-        "range": [
-          1,
-          500
-        ]
-      },
-      "repetitionPenalty": {
-        "value": 1,
-        "range": [
-          0.1,
-          2
-        ]
-      }
+    "openai": {
+        "models": {
+            "text-ada-001": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            2048
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "text-babbage-001": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            2048
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "text-curie-001": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            2048
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "text-davinci-003": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            4000
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "gpt-3.5-turbo": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            4097
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "gpt-4": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 0.5,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            8192
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            }
+        },
+        "requiresAPIKey": true,
+        "remoteInference": true,
+        "defaultParameters": null,
+        "searchURL": null
     },
-    "models": {}
-  },
-  "anthropic": {
-    "requiresAPIKey": true,
-    "remoteInference": true,
-    "models": {
-      "claude-instant-v1": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 205,
-            "range": [
-              50,
-              9216
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "claude-v1": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              9216
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      }
-    }
-  },
-  "aleph-alpha": {
-    "requiresAPIKey": true,
-    "remoteInference": true,
-    "models": {
-      "luminous-supreme-control": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              1024
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "topK": {
-            "value": 1,
-            "range": [
-              1,
-              500
-            ]
-          },
-          "repetitionPenalty": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "luminous-base": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              1024
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "topK": {
-            "value": 1,
-            "range": [
-              1,
-              500
-            ]
-          },
-          "repetitionPenalty": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "luminous-supreme": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              1024
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "topK": {
-            "value": 1,
-            "range": [
-              1,
-              500
-            ]
-          },
-          "repetitionPenalty": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      },
-      "luminous-extended": {
-        "enabled": false,
-        "status": "ready",
-        "capabilities": [
-          "logprobs"
-        ],
-        "parameters": {
-          "temperature": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "maximumLength": {
-            "value": 200,
-            "range": [
-              50,
-              1024
-            ]
-          },
-          "topP": {
-            "value": 1,
-            "range": [
-              0,
-              1
-            ]
-          },
-          "topK": {
-            "value": 1,
-            "range": [
-              1,
-              500
-            ]
-          },
-          "repetitionPenalty": {
-            "value": 1,
-            "range": [
-              0.1,
-              1
-            ]
-          },
-          "stopSequences": {
-            "value": [],
-            "range": []
-          }
-        }
-      }
-    }
-  },
-  "openplayground": {
-    "requiresAPIKey": false,
-    "remoteInference": false,
-    "searchURL": "https://openplayground.filler/api/search?q={searchQuery}",
-    "defaultCapabilities": [],
-    "defaultParameters": {
-      "temperature": {
-        "value": 1,
-        "range": [
-          0.1,
-          1
-        ]
-      },
-      "maximumLength": {
-        "value": 200,
-        "range": [
-          50,
-          1024
-        ]
-      },
-      "topP": {
-        "value": 1,
-        "range": [
-          0.1,
-          1
-        ]
-      },
-      "topK": {
-        "value": 1,
-        "range": [
-          1,
-          500
-        ]
-      },
-      "repetitionPenalty": {
-        "value": 1,
-        "range": [
-          0.1,
-          2
-        ]
-      }
+    "cohere": {
+        "models": {
+            "command-light": {
+                "capabilities": [],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            2
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            4096
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "topK": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            500
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "command": {
+                "capabilities": [],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            2
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            4096
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "topK": {
+                        "value": 0,
+                        "range": [
+                            0,
+                            500
+                        ]
+                    },
+                    "presencePenalty": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "frequencyPenalty": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            }
+        },
+        "requiresAPIKey": true,
+        "remoteInference": true,
+        "defaultParameters": null,
+        "searchURL": null
     },
-    "models": {}
-  }
+    "huggingface": {
+        "models": {},
+        "requiresAPIKey": true,
+        "remoteInference": true,
+        "defaultParameters": {
+            "temperature": {
+                "value": 1,
+                "range": [
+                    0.1,
+                    1
+                ]
+            },
+            "maximumLength": {
+                "value": 200,
+                "range": [
+                    50,
+                    1024
+                ]
+            },
+            "topP": {
+                "value": 0.99,
+                "range": [
+                    0.01,
+                    0.99
+                ]
+            },
+            "topK": {
+                "value": 1,
+                "range": [
+                    1,
+                    500
+                ]
+            },
+            "repetitionPenalty": {
+                "value": 1,
+                "range": [
+                    0.1,
+                    2
+                ]
+            },
+            "stopSequences": {
+                "value": [],
+                "range": []
+            }
+        },
+        "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model"
+    },
+    "huggingface-local": {
+        "models": {},
+        "requiresAPIKey": false,
+        "remoteInference": false,
+        "defaultParameters": {
+            "temperature": {
+                "value": 1,
+                "range": [
+                    0.1,
+                    1
+                ]
+            },
+            "maximumLength": {
+                "value": 200,
+                "range": [
+                    50,
+                    1024
+                ]
+            },
+            "topP": {
+                "value": 0.99,
+                "range": [
+                    0.1,
+                    0.99
+                ]
+            },
+            "topK": {
+                "value": 1,
+                "range": [
+                    1,
+                    500
+                ]
+            },
+            "repetitionPenalty": {
+                "value": 1,
+                "range": [
+                    0.1,
+                    2
+                ]
+            }
+        },
+        "searchURL": "https://huggingface.co/api/quicksearch?q={searchQuery}&type=model"
+    },
+    "anthropic": {
+        "models": {
+            "claude-instant-v1": {
+                "capabilities": [],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 205,
+                        "range": [
+                            50,
+                            9216
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "claude-v1": {
+                "capabilities": [],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            9216
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            }
+        },
+        "requiresAPIKey": true,
+        "remoteInference": true,
+        "defaultParameters": null,
+        "searchURL": null
+    },
+    "aleph-alpha": {
+        "models": {
+            "luminous-supreme-control": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            1024
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "topK": {
+                        "value": 1,
+                        "range": [
+                            1,
+                            500
+                        ]
+                    },
+                    "repetitionPenalty": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "luminous-base": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            1024
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "topK": {
+                        "value": 1,
+                        "range": [
+                            1,
+                            500
+                        ]
+                    },
+                    "repetitionPenalty": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "luminous-supreme": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            1024
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "topK": {
+                        "value": 1,
+                        "range": [
+                            1,
+                            500
+                        ]
+                    },
+                    "repetitionPenalty": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            },
+            "luminous-extended": {
+                "capabilities": [
+                    "logprobs"
+                ],
+                "enabled": false,
+                "status": "ready",
+                "parameters": {
+                    "temperature": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "maximumLength": {
+                        "value": 200,
+                        "range": [
+                            50,
+                            1024
+                        ]
+                    },
+                    "topP": {
+                        "value": 1,
+                        "range": [
+                            0,
+                            1
+                        ]
+                    },
+                    "topK": {
+                        "value": 1,
+                        "range": [
+                            1,
+                            500
+                        ]
+                    },
+                    "repetitionPenalty": {
+                        "value": 1,
+                        "range": [
+                            0.1,
+                            1
+                        ]
+                    },
+                    "stopSequences": {
+                        "value": [],
+                        "range": []
+                    }
+                }
+            }
+        },
+        "requiresAPIKey": true,
+        "remoteInference": true,
+        "defaultParameters": null,
+        "searchURL": null
+    },
+    "openplayground": {
+        "models": {},
+        "requiresAPIKey": false,
+        "remoteInference": false,
+        "defaultParameters": {
+            "temperature": {
+                "value": 1,
+                "range": [
+                    0.1,
+                    1
+                ]
+            },
+            "maximumLength": {
+                "value": 200,
+                "range": [
+                    50,
+                    1024
+                ]
+            },
+            "topP": {
+                "value": 1,
+                "range": [
+                    0.1,
+                    1
+                ]
+            },
+            "topK": {
+                "value": 1,
+                "range": [
+                    1,
+                    500
+                ]
+            },
+            "repetitionPenalty": {
+                "value": 1,
+                "range": [
+                    0.1,
+                    2
+                ]
+            }
+        },
+        "searchURL": "https://openplayground.filler/api/search?q={searchQuery}"
+    }
 }
